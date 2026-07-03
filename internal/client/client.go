@@ -54,8 +54,8 @@ func New() (*Client, error) {
 	p, err := ctx.NewPage()
 	if err == nil {
 		_, _ = p.Goto(searchBase, playwright.PageGotoOptions{
-			WaitUntil: playwright.WaitUntilStateNetworkidle,
-			Timeout:   playwright.Float(30000),
+			WaitUntil: playwright.WaitUntilStateLoad,
+			Timeout:   playwright.Float(60000),
 		})
 		p.Close()
 	}
@@ -108,19 +108,20 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		}
 	})
 
+	// Start navigation in the background so response wait overlaps with page load.
 	pageURL := buildURL(params)
-	if _, err := p.Goto(pageURL, playwright.PageGotoOptions{
-		WaitUntil: playwright.WaitUntilStateNetworkidle,
-		Timeout:   playwright.Float(30000),
-	}); err != nil {
-		return nil, fmt.Errorf("navigate: %w", err)
-	}
+	go func() {
+		_, _ = p.Goto(pageURL, playwright.PageGotoOptions{
+			WaitUntil: playwright.WaitUntilStateLoad,
+			Timeout:   playwright.Float(60000),
+		})
+	}()
 
 	select {
 	case result := <-respCh:
 		return result, nil
-	case <-time.After(5 * time.Second):
-		return nil, fmt.Errorf("no job data captured (search returned no results or API changed)")
+	case <-time.After(60 * time.Second):
+		return nil, fmt.Errorf("timeout: no job data captured within 60s (Cloudflare challenge or no results)")
 	}
 }
 
