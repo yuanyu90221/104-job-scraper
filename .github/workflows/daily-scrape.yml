@@ -21,7 +21,7 @@ on:
 jobs:
   scrape-and-notify:
     name: 爬取職缺並傳送 LINE 通知
-    runs-on: [self-hosted, local]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
