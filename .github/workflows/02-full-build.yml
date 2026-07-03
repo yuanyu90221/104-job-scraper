@@ -49,6 +49,11 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      - name: Patch Pants Go backend (GOEXPERIMENT workaround for Go 1.24+)
+        run: |
+          pants version
+          bash scripts/patch-pants-go.sh
+
       - name: 記錄全量 build 開始時間
         run: echo "START=$(date +%s)" >> "$GITHUB_ENV"
 
