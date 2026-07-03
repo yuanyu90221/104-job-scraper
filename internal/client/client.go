@@ -149,6 +149,7 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 func buildURL(params models.SearchParams) string {
 	u, _ := url.Parse(searchBase)
 	q := u.Query()
+	q.Set("jobsource", "joblist_search")
 	if params.Keyword != "" {
 		q.Set("keyword", params.Keyword)
 	}

@@ -88,7 +88,7 @@ window.chrome = { runtime: {} };
 
 	// 再前往搜尋頁
 	fmt.Println("Step 2: 前往搜尋頁...")
-	searchURL := "https://www.104.com.tw/jobs/search/?keyword=golang&page=1&order=2&asc=0"
+	searchURL := "https://www.104.com.tw/jobs/search/?jobsource=joblist_search&keyword=golang&page=1&order=2&asc=0"
 	_, err = page.Goto(searchURL, playwright.PageGotoOptions{
 		WaitUntil: playwright.WaitUntilStateLoad,
 		Timeout:   playwright.Float(60000),
