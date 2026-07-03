@@ -9,25 +9,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Go 1.22
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - uses: pantsbuild/actions/init-pants@v8
         with:
-          cache-lmdb-store: true
+          cache-lmdb-store: 'true'
 
-      - name: "產生專案架構 Mermaid 圖 (Job Summary)"
+      - name: 產生專案架構 Mermaid 圖 (Job Summary)
         run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          cat >> "$GITHUB_STEP_SUMMARY" << 'SUMMARY'
           ## 🏗️ 104 Job Scraper - 專案架構圖
 
           ### Package 依賴關係
 
           ```mermaid
           graph TD
-              cmd["📦 cmd/main\n(CLI 入口)"]
-              search["📦 internal/search\n(搜尋邏輯 + 分頁)"]
-              client["📦 internal/client\n(HTTP Client)"]
-              models["📦 internal/models\n(Job / SearchResponse)"]
-              formatter["📦 internal/formatter\n(table / json / csv)"]
-              notifier["📦 internal/notifier\n(LINE Notify)"]
+              cmd["📦 cmd/main (CLI 入口)"]
+              search["📦 internal/search (搜尋邏輯 + 分頁)"]
+              client["📦 internal/client (HTTP Client)"]
+              models["📦 internal/models (Job / SearchResponse)"]
+              formatter["📦 internal/formatter (table / json / csv)"]
+              notifier["📦 internal/notifier (LINE Notify)"]
 
               cmd --> search
               cmd --> formatter
@@ -40,9 +46,7 @@ jobs:
               style cmd fill:#bbf,stroke:#333,stroke-width:2px
           ```
 
-          > 💡 **Pants 漸進式編譯原則**：修改 `models` 會影響所有套件；修改 `formatter` 只影響 formatter + cmd。
-
-          ### Pants Build 流程
+          ### Pants Build 時序圖
 
           ```mermaid
           sequenceDiagram
@@ -56,39 +60,34 @@ jobs:
               Cache-->>Pants: 只有 formatter 變更
               Pants->>Go: 只編譯 formatter + cmd
               Go-->>Pants: 編譯完成
-              Pants->>Dev: ✅ 測試通過（其餘套件從快取命中）
+              Pants->>Dev: 測試通過（其餘套件快取命中）
           ```
 
           ### GitHub Actions 每日爬取流程
 
           ```mermaid
           flowchart LR
-              A["⏰ 每日 09:00 (台灣時間)"] --> B["Checkout & Init Pants"]
-              B --> C["pants package cmd:main\n(增量編譯)"]
-              C --> D["執行爬蟲\n關鍵字: golang 後端工程師\n最近 3 個月"]
+              A["每日 09:00 Taiwan"] --> B["Checkout & Setup Go"]
+              B --> C["pants package cmd:main"]
+              C --> D["執行爬蟲 golang 後端工程師 近3個月"]
               D --> E["過濾 + 格式化"]
-              E --> F["📱 LINE Notify\n傳送前 10 筆"]
-              E --> G["💾 Artifact\njobs.json"]
+              E --> F["LINE Notify 傳送前 10 筆"]
+              E --> G["Artifact jobs.json"]
           ```
-          EOF
+          SUMMARY
 
-      - name: "Step 1-1: 列出所有 targets"
+      - name: Step 1-1 - 列出所有 targets
+        run: pants list ::
+
+      - name: Step 1-2 - 查看 search 套件依賴
+        run: pants dependencies internal/search:: || true
+
+      - name: Step 1-3 - 查看 cmd 所有遞移依賴
+        run: pants dependencies --transitive cmd:: || true
+
+      - name: 更新 Job Summary - Target 清單
         run: |
-          echo "=== pants list :: ==="
-          pants list ::
-
-      - name: "Step 1-2: 查看各套件的依賴關係"
-        run: |
-          echo "=== internal/search 的直接依賴 ==="
-          pants dependencies internal/search:: || true
-
-          echo ""
-          echo "=== cmd 的所有遞移依賴 ==="
-          pants dependencies --transitive cmd:: || true
-
-      - name: "更新 Job Summary - Target 清單"
-        run: |
-          echo "## 📋 Pants Target 清單" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          pants list :: >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "## Pants Target 清單" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          pants list :: >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
