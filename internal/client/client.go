@@ -1,11 +1,14 @@
 package client
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/yuanyu90221/104-job-scraper/internal/models"
@@ -14,7 +17,7 @@ import (
 const (
 	baseURL   = "https://www.104.com.tw/jobs/search/list"
 	referer   = "https://www.104.com.tw/jobs/search/"
-	userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 
 // Client wraps net/http.Client with 104-specific configuration.
@@ -57,10 +60,17 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		return nil, fmt.Errorf("build request: %w", err)
 	}
 
-	// 104 requires these headers; without Referer the API returns empty results.
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Referer", referer)
 	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Accept-Language", "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Pragma", "no-cache")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -72,9 +82,28 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 
+	var body io.Reader = resp.Body
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		gr, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("gzip reader: %w", err)
+		}
+		defer gr.Close()
+		body = gr
+	}
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
 	var result models.SearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		preview := string(raw)
+		if len(preview) > 200 {
+			preview = preview[:200]
+		}
+		return nil, fmt.Errorf("decode response: %w\nbody: %s", err, strings.TrimSpace(preview))
 	}
 
 	return &result, nil
