@@ -12,13 +12,18 @@ type Searcher struct {
 	client *client.Client
 }
 
-// New creates a Searcher, visiting the 104 search page to warm up session cookies.
+// New creates a Searcher backed by a headless browser.
 func New() (*Searcher, error) {
 	c, err := client.New()
 	if err != nil {
 		return nil, err
 	}
 	return &Searcher{client: c}, nil
+}
+
+// Close releases the underlying browser resources.
+func (s *Searcher) Close() {
+	s.client.Close()
 }
 
 // Run fetches up to maxPages pages for the given params and returns all jobs.

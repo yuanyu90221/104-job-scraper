@@ -72,8 +72,9 @@ func run(keyword, area string, days, months, pages int, format formatter.Format,
 
 	s, err := search.New()
 	if err != nil {
-		return fmt.Errorf("初始化 client: %w", err)
+		return fmt.Errorf("初始化瀏覽器: %w", err)
 	}
+	defer s.Close()
 	jobs, err := s.Run(params, pages)
 	if err != nil {
 		return fmt.Errorf("搜尋失敗: %w", err)
