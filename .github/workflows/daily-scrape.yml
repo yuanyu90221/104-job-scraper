@@ -30,16 +30,10 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          cache: true
 
-      - name: Initialize Pants (with cache)
-        uses: pantsbuild/actions/init-pants@v8
-        with:
-          cache-lmdb-store: 'true'
-
-      - name: Build binary with Pants (incremental)
-        run: |
-          echo "=== Pants 漸進式編譯：只重建有變更的套件 ==="
-          pants package cmd:main
+      - name: Build binary
+        run: go build -o bin/104-job-scraper ./cmd/main.go
 
       - name: Run job scraper
         run: |
@@ -53,7 +47,7 @@ jobs:
           echo "最多頁數: $PAGES 頁"
 
           mkdir -p output
-          ./dist/cmd/main \
+          ./bin/104-job-scraper \
             --keyword="$KEYWORD" \
             --months="$MONTHS" \
             --days=30 \
@@ -68,8 +62,8 @@ jobs:
         run: |
           if [ -f output/jobs.json ]; then
             echo "=== 爬取結果摘要 ==="
-            python3 - <<'PYEOF'
-          import json, sys
+            python3 - << 'PYEOF'
+          import json
           with open('output/jobs.json') as f:
               jobs = json.load(f)
           print(f'共 {len(jobs)} 筆職缺')

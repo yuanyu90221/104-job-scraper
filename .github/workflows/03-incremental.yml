@@ -28,7 +28,20 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: 產生增量 Build Mermaid 圖 (formatter 情境)
+      - name: Cache Pants LMDB store
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pants/lmdb_store
+          key: "pants-lmdb-${{ runner.os }}-${{ hashFiles('pants.toml', 'go.sum') }}"
+          restore-keys: |
+            pants-lmdb-${{ runner.os }}-
+
+      - name: Install Pants
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: 產生增量 Build Mermaid 圖 - formatter 情境
         if: ${{ github.event.inputs.changed_package == 'formatter' || github.event.inputs.changed_package == '' }}
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" << 'SUMMARY'
@@ -38,9 +51,9 @@ jobs:
           graph TD
               models["models"] --> client["client"]
               client --> search["search"]
-              models --> formatter["formatter - 變更"]
+              models --> formatter["formatter 變更"]
               models --> notifier["notifier"]
-              search --> cmd["cmd - 需重建"]
+              search --> cmd["cmd 需重建"]
               formatter --> cmd
               notifier --> cmd
               style formatter fill:#ff9999,stroke:#333,stroke-width:3px
@@ -54,7 +67,7 @@ jobs:
           > 綠色=快取命中，紅色=重新編譯，橘色=因依賴而重建
           SUMMARY
 
-      - name: 產生增量 Build Mermaid 圖 (models 情境)
+      - name: 產生增量 Build Mermaid 圖 - models 情境
         if: ${{ github.event.inputs.changed_package == 'models' }}
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" << 'SUMMARY'
@@ -62,11 +75,11 @@ jobs:
 
           ```mermaid
           graph TD
-              models["models - 變更"] --> client["client - 需重建"]
-              client --> search["search - 需重建"]
-              models --> formatter["formatter - 需重建"]
-              models --> notifier["notifier - 需重建"]
-              search --> cmd["cmd - 需重建"]
+              models["models 變更"] --> client["client 需重建"]
+              client --> search["search 需重建"]
+              models --> formatter["formatter 需重建"]
+              models --> notifier["notifier 需重建"]
+              search --> cmd["cmd 需重建"]
               formatter --> cmd
               notifier --> cmd
               style models fill:#ff9999,stroke:#333,stroke-width:3px
@@ -80,18 +93,13 @@ jobs:
           > models 是底層依賴，變更時所有套件都需重建！
           SUMMARY
 
-      - name: Setup Pants (啟用快取)
-        uses: pantsbuild/actions/init-pants@v8
-        with:
-          cache-lmdb-store: 'true'
-
-      - name: 增量 Build - 記錄開始時間
-        run: echo "START=$(date +%s)" >> "$GITHUB_ENV"
-
       - name: 增量 Build - 偵測變更範圍
         run: |
           echo "=== 偵測到的變更 targets ==="
           pants --changed-since=HEAD~1 --changed-dependees=transitive list || echo "(無變更)"
+
+      - name: 記錄開始時間
+        run: echo "START=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: 增量 Build - 只測試有變更的套件及其下游依賴
         run: |

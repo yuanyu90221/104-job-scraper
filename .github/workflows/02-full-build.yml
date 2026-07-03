@@ -22,7 +22,7 @@ jobs:
 
           ```mermaid
           graph TD
-              subgraph "全量 Build - 每個套件都重新編譯"
+              subgraph all["全量 Build - 每個套件都重新編譯"]
                   A["models"] --> B["client"]
                   B --> C["search"]
                   A --> D["formatter"]
@@ -42,10 +42,10 @@ jobs:
           > 紅色表示需要重新編譯。無快取時全部重新編譯。
           SUMMARY
 
-      - name: Setup Pants (不啟用快取)
-        uses: pantsbuild/actions/init-pants@v8
-        with:
-          cache-lmdb-store: 'false'
+      - name: Install Pants (無快取)
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: 記錄全量 build 開始時間
         run: echo "START=$(date +%s)" >> "$GITHUB_ENV"
