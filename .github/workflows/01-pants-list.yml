@@ -7,6 +7,8 @@ jobs:
   list-targets:
     name: 列出所有 Pants targets 並查看依賴圖
     runs-on: ubuntu-latest
+    env:
+      GOEXPERIMENT: ""
     steps:
       - uses: actions/checkout@v4
 

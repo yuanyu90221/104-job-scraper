@@ -18,6 +18,8 @@ jobs:
   incremental-build:
     name: 有快取的增量 build
     runs-on: ubuntu-latest
+    env:
+      GOEXPERIMENT: ""
     steps:
       - uses: actions/checkout@v4
         with:
@@ -96,18 +98,18 @@ jobs:
       - name: 增量 Build - 偵測變更範圍
         run: |
           echo "=== 偵測到的變更 targets ==="
-          pants --changed-since=HEAD~1 --changed-dependees=transitive list || echo "(無變更)"
+          pants --changed-since=HEAD~1 --changed-dependents=transitive list || echo "(無變更)"
 
       - name: 記錄開始時間
         run: echo "START=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: 增量 Build - 只測試有變更的套件及其下游依賴
         run: |
-          CHANGED=$(pants --changed-since=HEAD~1 --changed-dependees=transitive list 2>/dev/null || true)
+          CHANGED=$(pants --changed-since=HEAD~1 --changed-dependents=transitive list 2>/dev/null || true)
           if [ -z "$CHANGED" ]; then
             echo "無變更 targets，跳過測試"
           else
-            pants --changed-since=HEAD~1 --changed-dependees=transitive test
+            pants --changed-since=HEAD~1 --changed-dependents=transitive test
           fi
 
       - name: 輸出增量 build 耗時

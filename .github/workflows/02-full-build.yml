@@ -7,6 +7,8 @@ jobs:
   full-build:
     name: 清除快取後全量 build
     runs-on: ubuntu-latest
+    env:
+      GOEXPERIMENT: ""
     steps:
       - uses: actions/checkout@v4
 
