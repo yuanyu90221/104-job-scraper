@@ -88,8 +88,12 @@ func (c *Client) Close() {
 }
 
 // Search navigates to the 104 search page and intercepts the JSON API response
-// that the page's own JavaScript triggers.
+// that the page's own JavaScript triggers. A small jitter is applied between
+// calls to reduce Cloudflare rate-limiting.
 func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, error) {
+	if params.Page > 1 {
+		time.Sleep(2 * time.Second)
+	}
 	p, err := c.context.NewPage()
 	if err != nil {
 		return nil, fmt.Errorf("new page: %w", err)
@@ -157,6 +161,7 @@ func buildURL(params models.SearchParams) string {
 	}
 	q.Set("order", strconv.Itoa(params.Order))
 	q.Set("asc", strconv.Itoa(params.Asc))
-	u.RawQuery = q.Encode()
+	// 104 expects %20 for spaces, not +
+	u.RawQuery = strings.ReplaceAll(q.Encode(), "+", "%20")
 	return u.String()
 }
