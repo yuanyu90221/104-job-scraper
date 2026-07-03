@@ -31,34 +31,5 @@ jobs:
       - name: go test
         run: go test ./...
 
-  pants-build:
-    name: Pants Build (incremental compile)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-          cache: true
-
-      - name: Cache Pants LMDB store
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pants/lmdb_store
-          key: "pants-lmdb-${{ runner.os }}-${{ hashFiles('pants.toml', 'go.sum') }}"
-          restore-keys: |
-            pants-lmdb-${{ runner.os }}-
-
-      - name: Install Pants
-        run: |
-          curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Pants list all targets
-        run: |
-          pants list ::
-
-      - name: Pants package binary
-        run: |
-          pants package cmd:bin
+      - name: go build
+        run: go build -o /tmp/104-job-scraper ./cmd/main.go
