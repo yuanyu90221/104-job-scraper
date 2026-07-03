@@ -70,7 +70,10 @@ func run(keyword, area string, days, months, pages int, format formatter.Format,
 		Asc:     0, // 最新優先
 	}
 
-	s := search.New()
+	s, err := search.New()
+	if err != nil {
+		return fmt.Errorf("初始化 client: %w", err)
+	}
 	jobs, err := s.Run(params, pages)
 	if err != nil {
 		return fmt.Errorf("搜尋失敗: %w", err)

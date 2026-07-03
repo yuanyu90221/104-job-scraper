@@ -16,7 +16,10 @@ func TestRun_LimitsToMaxPages(t *testing.T) {
 }
 
 func TestDefaultExpansionType(t *testing.T) {
-	s := New()
+	s, err := New()
+	if err != nil {
+		t.Skip("skipping: warmup requires network access:", err)
+	}
 	if s == nil {
 		t.Fatal("New() returned nil")
 	}
