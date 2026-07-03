@@ -1,0 +1,25 @@
+# Binaries
+bin/
+dist/
+
+# Go build cache
+*.exe
+*.test
+*.out
+
+# Pants internal files
+.pants.d/
+.pids
+*.pants.d
+
+# Output files
+output/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,37 @@
+name: Pants CI (PR & Push)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PANTS_CONFIG_FILES: pants.ci.toml
+
+jobs:
+  ci:
+    name: Lint / Test / Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize Pants (with cache)
+        uses: pantsbuild/actions/init-pants@v8
+        with:
+          cache-lmdb-store: true
+
+      - name: Verify BUILD files are up to date
+        run: |
+          echo "=== 確認所有 BUILD 檔案已是最新 ==="
+          pants tailor --check ::
+
+      - name: Lint
+        run: pants lint ::
+
+      - name: Test (all packages)
+        run: pants test ::
+
+      - name: Build binary
+        run: pants package cmd:main

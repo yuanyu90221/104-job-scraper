@@ -1,0 +1,2 @@
+[GLOBAL]
+pants_config_files = ["pants.toml"]

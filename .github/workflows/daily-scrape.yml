@@ -1,0 +1,87 @@
+name: Daily 104 Job Scrape - golang 後端工程師
+
+on:
+  schedule:
+    # UTC 01:00 = 台灣時間 09:00，每日執行一次
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      keyword:
+        description: '搜尋關鍵字'
+        required: false
+        default: 'golang 後端工程師'
+      months:
+        description: '幾個月內的職缺'
+        required: false
+        default: '3'
+      pages:
+        description: '爬取頁數'
+        required: false
+        default: '15'
+
+env:
+  PANTS_CONFIG_FILES: pants.ci.toml
+
+jobs:
+  scrape-and-notify:
+    name: 爬取職缺並傳送 LINE 通知
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize Pants (with cache)
+        uses: pantsbuild/actions/init-pants@v8
+        with:
+          cache-lmdb-store: true
+          pants-ci-config: pants.ci.toml
+
+      - name: Build binary with Pants (incremental)
+        run: |
+          echo "=== Pants 漸進式編譯：只重建有變更的套件 ==="
+          pants package cmd:main
+
+      - name: Run job scraper
+        run: |
+          KEYWORD="${{ github.event.inputs.keyword || 'golang 後端工程師' }}"
+          MONTHS="${{ github.event.inputs.months || '3' }}"
+          PAGES="${{ github.event.inputs.pages || '15' }}"
+
+          echo "=== 搜尋條件 ==="
+          echo "關鍵字: $KEYWORD"
+          echo "時間範圍: 近 ${MONTHS} 個月"
+          echo "最多頁數: $PAGES 頁"
+
+          mkdir -p output
+          ./dist/104-job-scraper/main \
+            --keyword="$KEYWORD" \
+            --months="$MONTHS" \
+            --days=30 \
+            --pages="$PAGES" \
+            --format=json \
+            --output=output/jobs.json \
+            --line-token="${{ secrets.LINE_NOTIFY_TOKEN }}" \
+            --line-top=10
+
+      - name: Show scrape summary
+        if: always()
+        run: |
+          if [ -f output/jobs.json ]; then
+            echo "=== 爬取結果摘要 ==="
+            cat output/jobs.json | python3 -c "
+          import json, sys
+          jobs = json.load(sys.stdin)
+          print(f'共 {len(jobs)} 筆職缺')
+          for i, j in enumerate(jobs[:5], 1):
+              print(f'{i}. {j[\"jobName\"]} @ {j[\"company\"][\"companyName\"]} ({j[\"publishDate\"]})')
+          if len(jobs) > 5:
+              print(f'... 還有 {len(jobs)-5} 筆')
+          "
+          fi
+
+      - name: Upload job results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-jobs-${{ github.run_id }}
+          path: output/jobs.json
+          retention-days: 30

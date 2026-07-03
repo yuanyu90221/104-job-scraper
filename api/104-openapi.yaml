@@ -1,0 +1,165 @@
+openapi: "3.0.3"
+info:
+  title: 104 Job Search API (Consumer Spec)
+  version: "1.0.0"
+  description: 104.com.tw 職缺搜尋 API 的消費端規格，供 104-job-scraper CLI 使用
+
+servers:
+  - url: https://www.104.com.tw
+
+paths:
+  /jobs/search/list:
+    get:
+      summary: 搜尋職缺列表
+      description: 搜尋 104 職缺，支援關鍵字、地區、日期等過濾條件
+      parameters:
+        - name: keyword
+          in: query
+          description: 搜尋關鍵字（職缺名稱、技能等）
+          schema:
+            type: string
+          example: golang
+        - name: area
+          in: query
+          description: 地區代碼（6001001000=台北市, 6001002000=新北市）
+          schema:
+            type: string
+          example: "6001001000"
+        - name: page
+          in: query
+          description: 頁碼，從 1 開始
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: isnew
+          in: query
+          description: "天數過濾: 0=今日, 3=3天內, 7=一週內, 14=兩週內, 30=一個月內"
+          schema:
+            type: integer
+            default: 30
+            enum: [0, 3, 7, 14, 30]
+        - name: order
+          in: query
+          description: "排序欄位: 1=相關度, 2=刊登日期, 13=薪資"
+          schema:
+            type: integer
+            default: 2
+            enum: [1, 2, 13]
+        - name: asc
+          in: query
+          description: "排序方向: 0=遞減, 1=遞增"
+          schema:
+            type: integer
+            default: 0
+            enum: [0, 1]
+        - name: expansionType
+          in: query
+          description: 回應展開欄位
+          schema:
+            type: string
+            default: "area,spec,com,job,wf,wktm"
+      responses:
+        "200":
+          description: 成功回應
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+
+components:
+  schemas:
+    SearchResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 0
+        statusMsg:
+          type: string
+          example: "OK"
+        data:
+          $ref: "#/components/schemas/SearchData"
+
+    SearchData:
+      type: object
+      properties:
+        totalCount:
+          type: integer
+          description: 總職缺數
+          example: 1234
+        totalPage:
+          type: integer
+          description: 總頁數
+          example: 62
+        pageNum:
+          type: integer
+          description: 目前頁碼
+          example: 1
+        pageSize:
+          type: integer
+          description: 每頁筆數（最多 20）
+          example: 20
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+
+    Job:
+      type: object
+      properties:
+        jobId:
+          type: string
+          example: "123456789"
+        jobName:
+          type: string
+          description: 職缺名稱
+          example: "Senior Golang Developer"
+        jobSalary:
+          type: string
+          description: 薪資範圍字串
+          example: "80000~120000"
+        salaryMonthDesc:
+          type: string
+          description: 薪資描述
+          example: "月薪 80,000~120,000"
+        salaryNegotiable:
+          type: boolean
+        publishDate:
+          type: string
+          format: date
+          example: "2026-07-04"
+        company:
+          $ref: "#/components/schemas/Company"
+        area:
+          type: array
+          items:
+            $ref: "#/components/schemas/Area"
+        workExp:
+          type: string
+          example: "3年以上"
+        edu:
+          type: string
+          example: "大專"
+
+    Company:
+      type: object
+      properties:
+        companyId:
+          type: string
+        companyName:
+          type: string
+          example: "Tech Company Ltd."
+        industryDesc:
+          type: string
+          example: "軟體/網際網路"
+
+    Area:
+      type: object
+      properties:
+        areaCode:
+          type: string
+          example: "6001001000"
+        areaDesc:
+          type: string
+          example: "台北市"

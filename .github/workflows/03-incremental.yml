@@ -1,0 +1,137 @@
+name: 教學 Step 3 - 增量 Build (有快取，只測試有變更的套件)
+
+on:
+  workflow_dispatch:
+    inputs:
+      changed_package:
+        description: '模擬變更了哪個套件（用於 Mermaid 視覺化）'
+        required: false
+        default: 'formatter'
+        type: choice
+        options:
+          - formatter
+          - client
+          - models
+          - notifier
+
+jobs:
+  incremental-build:
+    name: 有快取的增量 build（--changed-since）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: "產生增量 Build Mermaid 圖 (Job Summary)"
+        run: |
+          CHANGED="${{ github.event.inputs.changed_package || 'formatter' }}"
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🟢 Step 3: 增量 Build（有快取）
+
+          **模擬場景**：只修改了 \`internal/${CHANGED}\`
+
+          EOF
+
+          # 根據變更的套件動態產生不同的 Mermaid 圖
+          if [ "$CHANGED" = "formatter" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ```mermaid
+          graph TD
+              models["📦 models"] --> client["📦 client"]
+              client --> search["📦 search"]
+              models --> formatter["📦 formatter ⚙️ 變更"]
+              models --> notifier["📦 notifier"]
+              search --> cmd["📦 cmd ⚙️ 需重建"]
+              formatter --> cmd
+              notifier --> cmd
+
+              style formatter fill:#ff9999,stroke:#333,stroke-width:3px
+              style cmd fill:#ffcc99,stroke:#333,stroke-width:3px
+              style models fill:#99ff99
+              style client fill:#99ff99
+              style search fill:#99ff99
+              style notifier fill:#99ff99
+          ```
+          > 🟢 綠色=快取命中，🔴 紅色=重新編譯，🟡 橘色=因依賴而重建
+          EOF
+
+          elif [ "$CHANGED" = "models" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ```mermaid
+          graph TD
+              models["📦 models ⚙️ 變更"] --> client["📦 client ⚙️ 需重建"]
+              client --> search["📦 search ⚙️ 需重建"]
+              models --> formatter["📦 formatter ⚙️ 需重建"]
+              models --> notifier["📦 notifier ⚙️ 需重建"]
+              search --> cmd["📦 cmd ⚙️ 需重建"]
+              formatter --> cmd
+              notifier --> cmd
+
+              style models fill:#ff9999,stroke:#333,stroke-width:3px
+              style client fill:#ffcc99
+              style search fill:#ffcc99
+              style formatter fill:#ffcc99
+              style notifier fill:#ffcc99
+              style cmd fill:#ffcc99
+          ```
+          > ⚠️ models 是底層依賴，變更時所有套件都需要重建！
+          EOF
+
+          elif [ "$CHANGED" = "client" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ```mermaid
+          graph TD
+              models["📦 models"] --> client["📦 client ⚙️ 變更"]
+              client --> search["📦 search ⚙️ 需重建"]
+              models --> formatter["📦 formatter"]
+              models --> notifier["📦 notifier"]
+              search --> cmd["📦 cmd ⚙️ 需重建"]
+              formatter --> cmd
+              notifier --> cmd
+
+              style client fill:#ff9999,stroke:#333,stroke-width:3px
+              style search fill:#ffcc99
+              style cmd fill:#ffcc99
+              style models fill:#99ff99
+              style formatter fill:#99ff99
+              style notifier fill:#99ff99
+          ```
+          EOF
+          fi
+
+      - name: "Setup Pants (啟用快取)"
+        uses: pantsbuild/actions/init-pants@v8
+        with:
+          cache-lmdb-store: true
+
+      - name: "增量 Build: 記錄開始時間"
+        run: echo "START=$(date +%s)" >> $GITHUB_ENV
+
+      - name: "增量 Build: 偵測變更範圍"
+        run: |
+          echo "=== 偵測到的變更 targets ==="
+          pants --changed-since=HEAD~1 --changed-dependees=transitive list || echo "(無變更或為首次執行)"
+
+      - name: "增量 Build: 只測試有變更的套件及其下游依賴"
+        run: |
+          pants --changed-since=HEAD~1 --changed-dependees=transitive test || \
+            (echo "無變更 targets，跳過測試" && exit 0)
+
+      - name: "輸出增量 build 耗時並更新 Summary"
+        run: |
+          ELAPSED=$(( $(date +%s) - START ))
+          echo "=== 增量 build 耗時：${ELAPSED} 秒 ==="
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## ⏱️ 增量 Build 耗時：${ELAPSED} 秒
+
+          **與全量 Build 比較：**
+
+          | 指標 | 全量 Build | 增量 Build |
+          |------|-----------|-----------|
+          | 策略 | 重新編譯所有套件 | 只重建有變更的套件 |
+          | 快取 | ❌ 未使用 | ✅ 快取命中 |
+          | 適合場景 | 首次 CI / 清除快取 | 日常開發 PR |
+          EOF

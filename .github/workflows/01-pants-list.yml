@@ -1,0 +1,94 @@
+name: 教學 Step 1 - 展示 Pants Targets 與依賴圖
+
+on:
+  workflow_dispatch:
+
+jobs:
+  list-targets:
+    name: 列出所有 Pants targets 並查看依賴圖
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pantsbuild/actions/init-pants@v8
+        with:
+          cache-lmdb-store: true
+
+      - name: "產生專案架構 Mermaid 圖 (Job Summary)"
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## 🏗️ 104 Job Scraper - 專案架構圖
+
+          ### Package 依賴關係
+
+          ```mermaid
+          graph TD
+              cmd["📦 cmd/main\n(CLI 入口)"]
+              search["📦 internal/search\n(搜尋邏輯 + 分頁)"]
+              client["📦 internal/client\n(HTTP Client)"]
+              models["📦 internal/models\n(Job / SearchResponse)"]
+              formatter["📦 internal/formatter\n(table / json / csv)"]
+              notifier["📦 internal/notifier\n(LINE Notify)"]
+
+              cmd --> search
+              cmd --> formatter
+              cmd --> notifier
+              search --> client
+              client --> models
+              notifier --> models
+
+              style models fill:#f9f,stroke:#333,stroke-width:2px
+              style cmd fill:#bbf,stroke:#333,stroke-width:2px
+          ```
+
+          > 💡 **Pants 漸進式編譯原則**：修改 `models` 會影響所有套件；修改 `formatter` 只影響 formatter + cmd。
+
+          ### Pants Build 流程
+
+          ```mermaid
+          sequenceDiagram
+              participant Dev as 開發者
+              participant Pants as Pants Engine
+              participant Cache as 本地快取
+              participant Go as Go Compiler
+
+              Dev->>Pants: pants test ::
+              Pants->>Cache: 查詢哪些 target 有變更
+              Cache-->>Pants: 只有 formatter 變更
+              Pants->>Go: 只編譯 formatter + cmd
+              Go-->>Pants: 編譯完成
+              Pants->>Dev: ✅ 測試通過（其餘套件從快取命中）
+          ```
+
+          ### GitHub Actions 每日爬取流程
+
+          ```mermaid
+          flowchart LR
+              A["⏰ 每日 09:00 (台灣時間)"] --> B["Checkout & Init Pants"]
+              B --> C["pants package cmd:main\n(增量編譯)"]
+              C --> D["執行爬蟲\n關鍵字: golang 後端工程師\n最近 3 個月"]
+              D --> E["過濾 + 格式化"]
+              E --> F["📱 LINE Notify\n傳送前 10 筆"]
+              E --> G["💾 Artifact\njobs.json"]
+          ```
+          EOF
+
+      - name: "Step 1-1: 列出所有 targets"
+        run: |
+          echo "=== pants list :: ==="
+          pants list ::
+
+      - name: "Step 1-2: 查看各套件的依賴關係"
+        run: |
+          echo "=== internal/search 的直接依賴 ==="
+          pants dependencies internal/search:: || true
+
+          echo ""
+          echo "=== cmd 的所有遞移依賴 ==="
+          pants dependencies --transitive cmd:: || true
+
+      - name: "更新 Job Summary - Target 清單"
+        run: |
+          echo "## 📋 Pants Target 清單" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          pants list :: >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
