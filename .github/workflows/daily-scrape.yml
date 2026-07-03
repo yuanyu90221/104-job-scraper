@@ -21,16 +21,10 @@ on:
 jobs:
   scrape-and-notify:
     name: 爬取職缺並傳送 LINE 通知
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, local]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup Go 1.22
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache: true
 
       - name: Install Playwright Chromium
         run: go run github.com/mxschmitt/playwright-go/cmd/playwright install --with-deps chromium
@@ -41,6 +35,8 @@ jobs:
       - name: Run job scraper
         id: scrape
         continue-on-error: true
+        env:
+          DISPLAY: ':0'
         run: |
           KEYWORD="${{ github.event.inputs.keyword || 'golang 後端工程師' }}"
           MONTHS="${{ github.event.inputs.months || '3' }}"
@@ -65,8 +61,7 @@ jobs:
       - name: Check scrape result
         if: steps.scrape.outcome == 'failure'
         run: |
-          echo "::warning::爬蟲失敗。Playwright stealth 模式在本機可正常運作，但 GitHub Actions 的 IP 可能被 Cloudflare 封鎖。"
-          echo "::warning::建議使用 self-hosted runner，或在本機執行 CLI：DISPLAY=:0 go run ./cmd/main.go --keyword='golang 後端工程師'"
+          echo "::error::爬蟲失敗。請確認 self-hosted runner 正在執行，且本機有 DISPLAY 環境變數。"
 
       - name: Show scrape summary
         if: always()
@@ -79,7 +74,10 @@ jobs:
               jobs = json.load(f)
           print(f'共 {len(jobs)} 筆職缺')
           for i, j in enumerate(jobs[:5], 1):
-              print(f'{i}. {j["jobName"]} @ {j["company"]["companyName"]} ({j["publishDate"]})')
+              date = j.get("appearDate", "")
+              if len(date) == 8:
+                  date = f"{date[:4]}-{date[4:6]}-{date[6:]}"
+              print(f'{i}. {j["jobName"]} @ {j["custName"]} ({date})')
           if len(jobs) > 5:
               print(f'... 還有 {len(jobs)-5} 筆')
           PYEOF
