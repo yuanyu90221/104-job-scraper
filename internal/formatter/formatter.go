@@ -39,18 +39,13 @@ func printTable(w io.Writer, jobs []models.Job) error {
 	)
 
 	for i, j := range jobs {
-		area := areaList(j.Area)
-		salary := j.SalaryMonthDesc
-		if salary == "" {
-			salary = j.JobSalary
-		}
 		table.Append([]string{
 			fmt.Sprintf("%d", i+1),
 			j.JobName,
-			j.Company.CompanyName,
-			area,
-			salary,
-			j.PublishDate,
+			j.CustName,
+			j.JobAddrNoDesc,
+			salaryDesc(j),
+			formatDate(j.AppearDate),
 		})
 	}
 
@@ -68,21 +63,34 @@ func printCSV(w io.Writer, jobs []models.Job) error {
 	for _, j := range jobs {
 		fmt.Fprintf(w, "%s,%s,%s,%s,%s\n",
 			csvEscape(j.JobName),
-			csvEscape(j.Company.CompanyName),
-			csvEscape(areaList(j.Area)),
-			csvEscape(j.JobSalary),
-			j.PublishDate,
+			csvEscape(j.CustName),
+			csvEscape(j.JobAddrNoDesc),
+			csvEscape(salaryDesc(j)),
+			formatDate(j.AppearDate),
 		)
 	}
 	return nil
 }
 
-func areaList(areas []models.Area) string {
-	names := make([]string, len(areas))
-	for i, a := range areas {
-		names[i] = a.AreaDesc
+const salaryOpenEnd = 9999999
+
+// salaryDesc builds a human-readable salary string from the job's salary fields.
+func salaryDesc(j models.Job) string {
+	if j.SalaryLow > 0 && j.SalaryHigh > 0 && j.SalaryHigh < salaryOpenEnd {
+		return fmt.Sprintf("%d~%d", j.SalaryLow, j.SalaryHigh)
 	}
-	return strings.Join(names, "/")
+	if j.SalaryLow > 0 {
+		return fmt.Sprintf("%d 以上", j.SalaryLow)
+	}
+	return "面議"
+}
+
+// formatDate converts YYYYMMDD to YYYY-MM-DD for display.
+func formatDate(d string) string {
+	if len(d) == 8 {
+		return d[:4] + "-" + d[4:6] + "-" + d[6:]
+	}
+	return d
 }
 
 func csvEscape(s string) string {

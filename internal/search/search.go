@@ -7,6 +7,8 @@ import (
 	"github.com/yuanyu90221/104-job-scraper/internal/models"
 )
 
+const pageSize = 20
+
 // Searcher fetches multiple pages from 104 and aggregates results.
 type Searcher struct {
 	client *client.Client
@@ -27,12 +29,8 @@ func (s *Searcher) Close() {
 }
 
 // Run fetches up to maxPages pages for the given params and returns all jobs.
-// It stops early if there are no more pages.
+// It stops early when a page returns fewer than pageSize results.
 func (s *Searcher) Run(params models.SearchParams, maxPages int) ([]models.Job, error) {
-	if params.ExpansionType == "" {
-		params.ExpansionType = "area,spec,com,job,wf,wktm"
-	}
-
 	var jobs []models.Job
 
 	for page := 1; page <= maxPages; page++ {
@@ -43,9 +41,9 @@ func (s *Searcher) Run(params models.SearchParams, maxPages int) ([]models.Job, 
 			return nil, fmt.Errorf("page %d: %w", page, err)
 		}
 
-		jobs = append(jobs, resp.Data.List...)
+		jobs = append(jobs, resp.Data...)
 
-		if page >= resp.Data.TotalPage {
+		if len(resp.Data) < pageSize {
 			break
 		}
 	}

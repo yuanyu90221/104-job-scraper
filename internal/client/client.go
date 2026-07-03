@@ -21,8 +21,7 @@ type Client struct {
 	context playwright.BrowserContext
 }
 
-// New launches a headless browser and navigates to the 104 search page once
-// to solve the Cloudflare challenge and persist session cookies.
+// New launches a headless browser with stealth settings to avoid bot detection.
 func New() (*Client, error) {
 	pw, err := playwright.Run()
 	if err != nil {
@@ -31,7 +30,15 @@ func New() (*Client, error) {
 
 	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
 		Headless: playwright.Bool(true),
-		Args:     []string{"--no-sandbox", "--disable-setuid-sandbox"},
+		Args: []string{
+			"--no-sandbox",
+			"--disable-setuid-sandbox",
+			"--disable-blink-features=AutomationControlled",
+			"--disable-features=IsolateOrigins,site-per-process",
+			"--disable-dev-shm-usage",
+			"--no-first-run",
+			"--no-default-browser-check",
+		},
 	})
 	if err != nil {
 		pw.Stop()
@@ -40,9 +47,15 @@ func New() (*Client, error) {
 
 	ctx, err := browser.NewContext(playwright.BrowserNewContextOptions{
 		UserAgent: playwright.String(
-			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-				"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+				"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.60 Safari/537.36",
 		),
+		Locale:     playwright.String("zh-TW"),
+		TimezoneId: playwright.String("Asia/Taipei"),
+		Viewport: &playwright.Size{
+			Width:  1280,
+			Height: 720,
+		},
 	})
 	if err != nil {
 		browser.Close()
@@ -50,14 +63,18 @@ func New() (*Client, error) {
 		return nil, fmt.Errorf("new context: %w", err)
 	}
 
-	// Warmup: visit 104 to solve Cloudflare challenge and get session cookies.
-	p, err := ctx.NewPage()
-	if err == nil {
-		_, _ = p.Goto(searchBase, playwright.PageGotoOptions{
-			WaitUntil: playwright.WaitUntilStateLoad,
-			Timeout:   playwright.Float(60000),
-		})
-		p.Close()
+	if err := ctx.AddInitScript(playwright.Script{
+		Content: playwright.String(`
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+Object.defineProperty(navigator, 'languages', { get: () => ['zh-TW', 'zh', 'en-US', 'en'] });
+window.chrome = { runtime: {} };
+`),
+	}); err != nil {
+		ctx.Close()
+		browser.Close()
+		pw.Stop()
+		return nil, fmt.Errorf("add init script: %w", err)
 	}
 
 	return &Client{pw: pw, browser: browser, context: ctx}, nil
@@ -71,8 +88,7 @@ func (c *Client) Close() {
 }
 
 // Search navigates to the 104 search page and intercepts the JSON API response
-// that the page's own JavaScript triggers. This bypasses Cloudflare because
-// a real browser executes the challenge.
+// that the page's own JavaScript triggers.
 func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, error) {
 	p, err := c.context.NewPage()
 	if err != nil {
@@ -90,6 +106,9 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		if !strings.Contains(ct, "json") {
 			return
 		}
+		if !strings.Contains(r.URL(), "/search/api/jobs") {
+			return
+		}
 		body, err := r.Body()
 		if err != nil {
 			return
@@ -98,8 +117,7 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		if err := json.Unmarshal(body, &sr); err != nil {
 			return
 		}
-		// Only accept responses that contain real job listing data.
-		if sr.Data.TotalPage == 0 && len(sr.Data.List) == 0 {
+		if len(sr.Data) == 0 {
 			return
 		}
 		select {
@@ -108,7 +126,6 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		}
 	})
 
-	// Start navigation in the background so response wait overlaps with page load.
 	pageURL := buildURL(params)
 	go func() {
 		_, _ = p.Goto(pageURL, playwright.PageGotoOptions{

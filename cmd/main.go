@@ -85,7 +85,7 @@ func run(keyword, area string, days, months, pages int, format formatter.Format,
 		cutoff := time.Now().AddDate(0, -months, 0)
 		filtered := jobs[:0]
 		for _, j := range jobs {
-			if t, parseErr := time.Parse("2006-01-02", j.PublishDate); parseErr == nil && t.After(cutoff) {
+			if t, parseErr := time.Parse("20060102", j.AppearDate); parseErr == nil && t.After(cutoff) {
 				filtered = append(filtered, j)
 			}
 		}

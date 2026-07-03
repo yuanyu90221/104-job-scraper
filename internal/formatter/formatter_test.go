@@ -10,12 +10,13 @@ import (
 
 var sampleJobs = []models.Job{
 	{
-		JobName:         "Golang Engineer",
-		JobSalary:       "80000~120000",
-		SalaryMonthDesc: "月薪 80,000~120,000",
-		PublishDate:     "2026-07-04",
-		Company:         models.Company{CompanyName: "Acme Corp"},
-		Area:            []models.Area{{AreaDesc: "台北市"}},
+		JobName:       "Golang Engineer",
+		CustName:      "Acme Corp",
+		SalaryLow:     80000,
+		SalaryHigh:    120000,
+		AppearDate:    "20260704",
+		JobAddrNoDesc: "台北市",
+		Link:          models.JobLink{Job: "https://www.104.com.tw/job/abc123"},
 	},
 }
 

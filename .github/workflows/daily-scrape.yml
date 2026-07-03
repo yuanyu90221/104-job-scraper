@@ -65,8 +65,8 @@ jobs:
       - name: Check scrape result
         if: steps.scrape.outcome == 'failure'
         run: |
-          echo "::warning::爬蟲失敗。104.com.tw 封鎖了 GitHub Actions 的 IP（Cloudflare 保護）。"
-          echo "::warning::建議使用 self-hosted runner 或在本機直接執行 CLI。"
+          echo "::warning::爬蟲失敗。Playwright stealth 模式在本機可正常運作，但 GitHub Actions 的 IP 可能被 Cloudflare 封鎖。"
+          echo "::warning::建議使用 self-hosted runner，或在本機執行 CLI：DISPLAY=:0 go run ./cmd/main.go --keyword='golang 後端工程師'"
 
       - name: Show scrape summary
         if: always()

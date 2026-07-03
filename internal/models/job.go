@@ -1,55 +1,37 @@
 package models
 
-// SearchResponse mirrors the 104 API top-level response envelope.
+// SearchResponse mirrors the 104 /jobs/search/api/jobs response envelope.
 type SearchResponse struct {
-	Status    int        `json:"status"`
-	StatusMsg string     `json:"statusMsg"`
-	Data      SearchData `json:"data"`
+	Data []Job `json:"data"`
 }
 
-// SearchData holds pagination metadata and the job list.
-type SearchData struct {
-	TotalCount int   `json:"totalCount"`
-	TotalPage  int   `json:"totalPage"`
-	PageNum    int   `json:"pageNum"`
-	PageSize   int   `json:"pageSize"`
-	List       []Job `json:"list"`
-}
-
-// Job represents a single 104 job listing.
+// Job represents a single 104 job listing from the /api/jobs endpoint.
 type Job struct {
-	JobID            string  `json:"jobId"`
-	JobName          string  `json:"jobName"`
-	JobSalary        string  `json:"jobSalary"`
-	SalaryMonthDesc  string  `json:"salaryMonthDesc"`
-	SalaryNegotiable bool    `json:"salaryNegotiable"`
-	PublishDate      string  `json:"publishDate"`
-	WorkExp          string  `json:"workExp"`
-	Edu              string  `json:"edu"`
-	Company          Company `json:"company"`
-	Area             []Area  `json:"area"`
+	JobNo          string  `json:"jobNo"`
+	JobName        string  `json:"jobName"`
+	CustName       string  `json:"custName"`
+	CustNo         string  `json:"custNo"`
+	CoIndustryDesc string  `json:"coIndustryDesc"`
+	SalaryHigh     int     `json:"salaryHigh"`
+	SalaryLow      int     `json:"salaryLow"`
+	AppearDate     string  `json:"appearDate"` // YYYYMMDD
+	JobAddrNoDesc  string  `json:"jobAddrNoDesc"`
+	Link           JobLink `json:"link"`
+	Description    string  `json:"description"`
 }
 
-// Company holds employer information.
-type Company struct {
-	CompanyID    string `json:"companyId"`
-	CompanyName  string `json:"companyName"`
-	IndustryDesc string `json:"industryDesc"`
-}
-
-// Area represents a work location.
-type Area struct {
-	AreaCode string `json:"areaCode"`
-	AreaDesc string `json:"areaDesc"`
+// JobLink holds URLs for the job listing and company page.
+type JobLink struct {
+	Job  string `json:"job"`
+	Cust string `json:"cust"`
 }
 
 // SearchParams holds all query parameters for the 104 search API.
 type SearchParams struct {
-	Keyword       string
-	Area          string
-	Page          int
-	Days          int // maps to isnew parameter
-	Order         int // 1=relevance, 2=date, 13=salary
-	Asc           int // 0=desc, 1=asc
-	ExpansionType string
+	Keyword string
+	Area    string
+	Page    int
+	Days    int // maps to isnew parameter
+	Order   int // 1=relevance, 2=date, 13=salary
+	Asc     int // 0=desc, 1=asc
 }

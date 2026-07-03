@@ -11,12 +11,14 @@ import (
 
 var sampleJobs = []models.Job{
 	{
-		JobID:           "abc123",
-		JobName:         "Golang 後端工程師",
-		SalaryMonthDesc: "月薪 80,000~120,000",
-		PublishDate:     "2026-07-04",
-		Company:         models.Company{CompanyName: "Acme Corp"},
-		Area:            []models.Area{{AreaDesc: "台北市"}},
+		JobNo:         "abc123",
+		JobName:       "Golang 後端工程師",
+		CustName:      "Acme Corp",
+		SalaryLow:     80000,
+		SalaryHigh:    120000,
+		AppearDate:    "20260704",
+		JobAddrNoDesc: "台北市",
+		Link:          models.JobLink{Job: "https://www.104.com.tw/job/abc123"},
 	},
 }
 
@@ -44,13 +46,10 @@ func TestSend_Success(t *testing.T) {
 		token:  "test-token",
 		client: srv.Client(),
 	}
-	// Point to test server by temporarily overriding (use package-level var in real code)
-	// For this test we just verify no panic on topN > len(jobs)
 	_ = n
 }
 
 func TestBuildMessage_TruncatesLongMessages(t *testing.T) {
-	// Create many jobs to force a long message
 	many := make([]models.Job, 20)
 	for i := range many {
 		many[i] = sampleJobs[0]

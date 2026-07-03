@@ -46,32 +46,40 @@ func buildMessage(jobs []models.Job, keyword string) string {
 	sb.WriteString("─────────────────\n")
 
 	for i, j := range jobs {
-		salary := j.SalaryMonthDesc
-		if salary == "" {
-			salary = j.JobSalary
-		}
-		if salary == "" {
-			salary = "薪資面議"
-		}
-
-		area := ""
-		if len(j.Area) > 0 {
-			area = j.Area[0].AreaDesc
-		}
+		salary := salaryDesc(j)
+		date := formatDate(j.AppearDate)
 
 		fmt.Fprintf(&sb, "\n%d. %s\n", i+1, j.JobName)
-		fmt.Fprintf(&sb, "   🏢 %s\n", j.Company.CompanyName)
-		fmt.Fprintf(&sb, "   📍 %s\n", area)
+		fmt.Fprintf(&sb, "   🏢 %s\n", j.CustName)
+		fmt.Fprintf(&sb, "   📍 %s\n", j.JobAddrNoDesc)
 		fmt.Fprintf(&sb, "   💰 %s\n", salary)
-		fmt.Fprintf(&sb, "   📆 %s\n", j.PublishDate)
-		fmt.Fprintf(&sb, "   🔗 https://www.104.com.tw/job/ajax/content/%s\n", j.JobID)
+		fmt.Fprintf(&sb, "   📆 %s\n", date)
+		fmt.Fprintf(&sb, "   🔗 %s\n", j.Link.Job)
 	}
 
 	return sb.String()
 }
 
+const salaryOpenEnd = 9999999
+
+func salaryDesc(j models.Job) string {
+	if j.SalaryLow > 0 && j.SalaryHigh > 0 && j.SalaryHigh < salaryOpenEnd {
+		return fmt.Sprintf("%d~%d", j.SalaryLow, j.SalaryHigh)
+	}
+	if j.SalaryLow > 0 {
+		return fmt.Sprintf("%d 以上", j.SalaryLow)
+	}
+	return "面議"
+}
+
+func formatDate(d string) string {
+	if len(d) == 8 {
+		return d[:4] + "-" + d[4:6] + "-" + d[6:]
+	}
+	return d
+}
+
 func (n *LineNotifier) post(message string) error {
-	// LINE Notify 單次訊息上限 1000 字元，超過自動截斷
 	const maxLen = 1000
 	if len([]rune(message)) > maxLen {
 		runes := []rune(message)
