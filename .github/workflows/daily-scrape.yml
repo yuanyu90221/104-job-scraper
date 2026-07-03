@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Playwright Chromium
-        run: go run github.com/mxschmitt/playwright-go/cmd/playwright install --with-deps chromium
+        run: go run github.com/mxschmitt/playwright-go/cmd/playwright install chromium
 
       - name: Build binary
         run: go build -o bin/104-job-scraper ./cmd/main.go
