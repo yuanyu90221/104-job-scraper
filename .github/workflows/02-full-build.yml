@@ -51,7 +51,7 @@ jobs:
 
       - name: Patch Pants Go backend (GOEXPERIMENT workaround for Go 1.24+)
         run: |
-          pants version
+          pants --no-pantsd version
           bash scripts/patch-pants-go.sh
 
       - name: 記錄全量 build 開始時間
