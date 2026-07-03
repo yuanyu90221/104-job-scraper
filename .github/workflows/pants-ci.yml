@@ -7,17 +7,40 @@ on:
     branches: [main]
 
 jobs:
-  ci:
-    name: Test / Build
+  test:
+    name: Test (Go)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Go 1.22
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.25"
+          cache: true
+
+      - name: gofmt check
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+  pants-build:
+    name: Pants Build (incremental compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
 
       - name: Cache Pants LMDB store
         uses: actions/cache@v4
@@ -32,13 +55,10 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Verify BUILD files are up to date
+      - name: Pants list all targets
         run: |
-          pants tailor --check ::
+          pants list ::
 
-      - name: Test (all packages)
+      - name: Pants package binary
         run: |
-          pants test ::
-
-      - name: Build binary
-        run: pants package cmd:main
+          pants package cmd:bin

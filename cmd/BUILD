@@ -1,1 +1,5 @@
-go_binary(name="main")
+go_package()
+
+go_binary(
+    name="bin",
+)

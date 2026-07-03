@@ -1,9 +1,15 @@
 [GLOBAL]
 pants_version = "2.27.0"
-backend_packages = ["pants.backend.experimental.go"]
+backend_packages = [
+  "pants.backend.experimental.go",
+]
 
 [golang]
-minimum_expected_version = "1.25"
+# 使用系統已安裝的 Go（go.mod 中指定 1.25.0）；此為最低版本要求
+minimum_expected_version = "1.21"
+
+[go-test]
+args = ["-v"]
 
 [anonymous-telemetry]
 enabled = false

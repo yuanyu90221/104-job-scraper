@@ -1,1 +1,1 @@
-go_package(name="search")
+go_package()

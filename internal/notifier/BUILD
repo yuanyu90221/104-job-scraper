@@ -1,1 +1,1 @@
-go_package(name="notifier")
+go_package()

@@ -1,1 +1,1 @@
-go_package(name="client")
+go_package()

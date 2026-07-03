@@ -1,1 +1,1 @@
-go_package(name="formatter")
+go_package()

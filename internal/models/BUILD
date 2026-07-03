@@ -1,1 +1,1 @@
-go_package(name="models")
+go_package()
