@@ -50,8 +50,9 @@ jobs:
       - name: 記錄全量 build 開始時間
         run: echo "START=$(date +%s)" >> "$GITHUB_ENV"
 
-      - name: Full Build - pants test :: (全部套件)
-        run: pants test ::
+      - name: Full Build - pants test all packages
+        run: |
+          pants test ::
 
       - name: 輸出全量 build 耗時並更新 Summary
         run: |

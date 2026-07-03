@@ -33,10 +33,12 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Verify BUILD files are up to date
-        run: pants tailor --check ::
+        run: |
+          pants tailor --check ::
 
       - name: Test (all packages)
-        run: pants test ::
+        run: |
+          pants test ::
 
       - name: Build binary
         run: pants package cmd:main
