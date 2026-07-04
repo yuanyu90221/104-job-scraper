@@ -39,5 +39,5 @@
 
 ## 6. Follow-up
 
-- [ ] 6.1 Archive this change via OpenSpec once merged and validated, promoting `job-notification` into `openspec/specs/`
-- [ ] 6.2 Note the now-unused `LINE_NOTIFY_TOKEN` GitHub secret for the user to delete manually (repo-admin action, out of scope for this change)
+- [x] 6.1 Archive this change via OpenSpec once merged and validated, promoting `job-notification` into `openspec/specs/`
+- [x] 6.2 Note the now-unused `LINE_NOTIFY_TOKEN` GitHub secret for the user to delete manually (repo-admin action, out of scope for this change) — flagged to the user; deletion is a manual repo-admin action left for them
