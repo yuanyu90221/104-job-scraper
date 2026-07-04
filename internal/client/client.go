@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,18 +11,31 @@ import (
 	"strings"
 	"time"
 
-	playwright "github.com/mxschmitt/playwright-go"
+	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/launcher/flags"
+	"github.com/go-rod/rod/lib/proto"
+	"github.com/go-rod/stealth"
 	"github.com/yuanyu90221/104-job-scraper/internal/models"
 )
 
 // browserChannelEnv selects which browser binary New launches. Empty (the
-// default) uses Playwright's bundled Chromium. "chrome" launches a real,
-// separately-installed Chrome build (`playwright install chrome`) — spike
-// for whether a genuine Chrome fingerprint clears Cloudflare's managed
-// challenge more reliably than the bundled, more fingerprintable Chromium.
+// default) lets go-rod auto-resolve a browser (system lookup, then
+// auto-download if none found). "chrome" requires a real, separately
+// installed Chrome — spike for whether a genuine Chrome fingerprint clears
+// Cloudflare's managed challenge more reliably than an auto-resolved browser.
 const browserChannelEnv = "SCRAPER_BROWSER_CHANNEL"
 
 const searchBase = "https://www.104.com.tw/jobs/search/"
+
+// userAgent, locale, timezone and viewport mirror the previous
+// playwright-go BrowserContext defaults; go-rod has no persistent context to
+// set these on once, so they're (re)applied to every page New/Search opens.
+const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.60 Safari/537.36"
+const acceptLanguage = "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7"
+const timezone = "Asia/Taipei"
+const viewportWidth, viewportHeight = 1280, 720
 
 // ErrCloudflareChallenge is returned by Search when the response is a
 // Cloudflare managed/JS challenge instead of the expected job data, so
@@ -44,91 +58,146 @@ func isCloudflareChallenge(status int, headers map[string]string, body []byte) b
 		strings.Contains(string(body), "Just a moment")
 }
 
-// Client drives a headless Chromium browser to bypass Cloudflare protection.
-type Client struct {
-	pw      *playwright.Playwright
-	browser playwright.Browser
-	context playwright.BrowserContext
-	baseURL string
+// launchConfig is the plain-data result of resolving a browser channel into
+// launcher flags/binary, kept free of any *launcher.Launcher so it can be
+// unit-tested without launching a real browser.
+type launchConfig struct {
+	flags   map[string][]string
+	binPath string
 }
 
-// chromiumLaunchOptions builds the launch options for the browser, applying
-// the same stealth args regardless of channel. An empty channel launches
-// Playwright's bundled Chromium; "chrome" launches a real installed Chrome.
-func chromiumLaunchOptions(channel string) playwright.BrowserTypeLaunchOptions {
-	opts := playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(true),
-		Args: []string{
-			"--no-sandbox",
-			"--disable-setuid-sandbox",
-			"--disable-blink-features=AutomationControlled",
-			"--disable-features=IsolateOrigins,site-per-process",
-			"--disable-dev-shm-usage",
-			"--no-first-run",
-			"--no-default-browser-check",
+// buildLaunchConfig resolves channel into a launchConfig. lookPath is
+// injected (normally launcher.LookPath) so tests can simulate "Chrome
+// found"/"Chrome missing" without depending on the machine's actual state.
+func buildLaunchConfig(channel string, lookPath func() (string, bool)) (launchConfig, error) {
+	cfg := launchConfig{
+		flags: map[string][]string{
+			"no-sandbox":               nil,
+			"disable-setuid-sandbox":   nil,
+			"disable-blink-features":   {"AutomationControlled"},
+			"disable-features":         {"IsolateOrigins,site-per-process"},
+			"disable-dev-shm-usage":    nil,
+			"no-first-run":             nil,
+			"no-default-browser-check": nil,
 		},
 	}
-	if channel != "" {
-		opts.Channel = playwright.String(channel)
+	if channel == "chrome" {
+		bin, ok := lookPath()
+		if !ok {
+			return launchConfig{}, fmt.Errorf("%s=chrome requested but no installed Chrome was found", browserChannelEnv)
+		}
+		cfg.binPath = bin
 	}
-	return opts
+	return cfg, nil
+}
+
+// newLauncher turns a launchConfig into a real *launcher.Launcher.
+func newLauncher(cfg launchConfig) *launcher.Launcher {
+	l := launcher.New().Headless(true)
+	for name, values := range cfg.flags {
+		l = l.Set(flags.Flag(name), values...)
+	}
+	if cfg.binPath != "" {
+		l = l.Bin(cfg.binPath)
+	}
+	return l
+}
+
+// Client drives a headless, stealth-patched browser to bypass Cloudflare
+// protection.
+type Client struct {
+	launcher *launcher.Launcher
+	browser  *rod.Browser
+	baseURL  string
 }
 
 // New launches a headless browser with stealth settings to avoid bot
-// detection. The browser channel (bundled Chromium vs. a real installed
+// detection. The browser channel (auto-resolved vs. a real installed
 // Chrome) is controlled by the SCRAPER_BROWSER_CHANNEL env var.
 func New() (*Client, error) {
-	pw, err := playwright.Run()
+	cfg, err := buildLaunchConfig(os.Getenv(browserChannelEnv), launcher.LookPath)
 	if err != nil {
-		return nil, fmt.Errorf("start playwright: %w", err)
+		return nil, err
 	}
 
-	browser, err := pw.Chromium.Launch(chromiumLaunchOptions(os.Getenv(browserChannelEnv)))
+	l := newLauncher(cfg)
+	controlURL, err := l.Launch()
 	if err != nil {
-		pw.Stop()
-		return nil, fmt.Errorf("launch chromium: %w", err)
+		return nil, fmt.Errorf("launch browser: %w", err)
 	}
 
-	ctx, err := browser.NewContext(playwright.BrowserNewContextOptions{
-		UserAgent: playwright.String(
-			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-				"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.60 Safari/537.36",
-		),
-		Locale:     playwright.String("zh-TW"),
-		TimezoneId: playwright.String("Asia/Taipei"),
-		Viewport: &playwright.Size{
-			Width:  1280,
-			Height: 720,
-		},
-	})
-	if err != nil {
-		browser.Close()
-		pw.Stop()
-		return nil, fmt.Errorf("new context: %w", err)
+	browser := rod.New().ControlURL(controlURL)
+	if err := browser.Connect(); err != nil {
+		l.Cleanup()
+		return nil, fmt.Errorf("connect browser: %w", err)
 	}
 
-	if err := ctx.AddInitScript(playwright.Script{
-		Content: playwright.String(`
-Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-Object.defineProperty(navigator, 'languages', { get: () => ['zh-TW', 'zh', 'en-US', 'en'] });
-window.chrome = { runtime: {} };
-`),
-	}); err != nil {
-		ctx.Close()
-		browser.Close()
-		pw.Stop()
-		return nil, fmt.Errorf("add init script: %w", err)
-	}
-
-	return &Client{pw: pw, browser: browser, context: ctx, baseURL: searchBase}, nil
+	return &Client{launcher: l, browser: browser, baseURL: searchBase}, nil
 }
 
-// Close releases the browser and playwright resources.
+// Close releases the browser and launcher resources.
 func (c *Client) Close() {
-	c.context.Close()
-	c.browser.Close()
-	c.pw.Stop()
+	_ = c.browser.Close()
+	c.launcher.Cleanup()
+}
+
+// newStealthPage opens a fresh stealth-patched page and applies the same
+// user-agent/locale/timezone/viewport settings that used to be set once per
+// playwright-go BrowserContext.
+func newStealthPage(browser *rod.Browser) (*rod.Page, error) {
+	page, err := stealth.Page(browser)
+	if err != nil {
+		return nil, fmt.Errorf("new stealth page: %w", err)
+	}
+
+	page.EnableDomain(&proto.NetworkEnable{})
+
+	if err := page.SetUserAgent(&proto.NetworkSetUserAgentOverride{
+		UserAgent:      userAgent,
+		AcceptLanguage: acceptLanguage,
+	}); err != nil {
+		_ = page.Close()
+		return nil, fmt.Errorf("set user agent: %w", err)
+	}
+
+	if err := (proto.EmulationSetTimezoneOverride{TimezoneID: timezone}).Call(page); err != nil {
+		_ = page.Close()
+		return nil, fmt.Errorf("set timezone: %w", err)
+	}
+
+	if err := page.SetViewport(&proto.EmulationSetDeviceMetricsOverride{
+		Width:  viewportWidth,
+		Height: viewportHeight,
+	}); err != nil {
+		_ = page.Close()
+		return nil, fmt.Errorf("set viewport: %w", err)
+	}
+
+	return page, nil
+}
+
+// networkHeadersToMap converts go-rod's CDP header representation into the
+// plain map[string]string that isCloudflareChallenge expects.
+func networkHeadersToMap(h proto.NetworkHeaders) map[string]string {
+	out := make(map[string]string, len(h))
+	for k, v := range h {
+		out[strings.ToLower(k)] = v.String()
+	}
+	return out
+}
+
+// responseBody fetches a response's body via CDP, returning ("", err) if it
+// can't be read (e.g. already-consumed/cached responses) rather than
+// failing the whole search.
+func responseBody(page *rod.Page, requestID proto.NetworkRequestID) ([]byte, error) {
+	result, err := (proto.NetworkGetResponseBody{RequestID: requestID}).Call(page)
+	if err != nil {
+		return nil, err
+	}
+	if result.Base64Encoded {
+		return base64.StdEncoding.DecodeString(result.Body)
+	}
+	return []byte(result.Body), nil
 }
 
 // Search navigates to the 104 search page and intercepts the JSON API response
@@ -138,7 +207,7 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 	if params.Page > 1 {
 		time.Sleep(2 * time.Second)
 	}
-	p, err := c.context.NewPage()
+	p, err := newStealthPage(c.browser)
 	if err != nil {
 		return nil, fmt.Errorf("new page: %w", err)
 	}
@@ -159,56 +228,83 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		return url == pageURL || strings.Contains(url, "/search/api/jobs")
 	}
 
-	p.On("response", func(r playwright.Response) {
-		status := r.Status()
-		headers := r.Headers()
-		url := r.URL()
+	// pending tracks relevant responses by request ID between
+	// NetworkResponseReceived (headers only) and NetworkLoadingFinished
+	// (body fully buffered). Network.getResponseBody fails with "No data
+	// found for resource with given identifier" if called before loading
+	// finishes, so the body fetch must wait for that second event. Both
+	// event types are dispatched on the same single-threaded EachEvent
+	// loop, so this map needs no locking.
+	type pendingResponse struct {
+		status  int
+		headers map[string]string
+		url     string
+	}
+	pending := map[proto.NetworkRequestID]pendingResponse{}
 
-		if status == 403 {
-			if !isRelevant(url) {
-				return
+	stop := p.EachEvent(
+		func(e *proto.NetworkResponseReceived) bool {
+			status := e.Response.Status
+			headers := networkHeadersToMap(e.Response.Headers)
+			url := e.Response.URL
+
+			if status == 403 {
+				if !isRelevant(url) {
+					return false
+				}
+			} else if status != 200 || !strings.Contains(headers["content-type"], "json") || !strings.Contains(url, "/search/api/jobs") {
+				return false
 			}
-			body, _ := r.Body()
-			if isCloudflareChallenge(status, headers, body) {
+			pending[e.RequestID] = pendingResponse{status: status, headers: headers, url: url}
+			return false
+		},
+		func(e *proto.NetworkLoadingFinished) bool {
+			pr, ok := pending[e.RequestID]
+			if !ok {
+				return false
+			}
+			delete(pending, e.RequestID)
+			requestID := e.RequestID
+			// Body is fetched off the event-dispatch goroutine: a blocking
+			// CDP call made synchronously inside an EachEvent callback can
+			// deadlock the dispatcher if further events arrive before the
+			// call's response does (the dispatcher can't drain the next
+			// event until this callback returns, but the connection's
+			// reader can't deliver our call's response until the
+			// dispatcher drains the events queued ahead of it).
+			go func() {
+				body, err := responseBody(p, requestID)
+				if err != nil {
+					return
+				}
+				if pr.status == 403 {
+					if isCloudflareChallenge(pr.status, pr.headers, body) {
+						select {
+						case errCh <- fmt.Errorf("%s: %w", pr.url, ErrCloudflareChallenge):
+						default:
+						}
+					}
+					return
+				}
+				var sr models.SearchResponse
+				if err := json.Unmarshal(body, &sr); err != nil {
+					return
+				}
+				if len(sr.Data) == 0 {
+					return
+				}
 				select {
-				case errCh <- fmt.Errorf("%s: %w", url, ErrCloudflareChallenge):
+				case respCh <- &sr:
 				default:
 				}
-			}
-			return
-		}
-		if status != 200 {
-			return
-		}
-		ct := headers["content-type"]
-		if !strings.Contains(ct, "json") {
-			return
-		}
-		if !strings.Contains(url, "/search/api/jobs") {
-			return
-		}
-		body, err := r.Body()
-		if err != nil {
-			return
-		}
-		var sr models.SearchResponse
-		if err := json.Unmarshal(body, &sr); err != nil {
-			return
-		}
-		if len(sr.Data) == 0 {
-			return
-		}
-		select {
-		case respCh <- &sr:
-		default:
-		}
-	})
+			}()
+			return false
+		},
+	)
+	go stop()
 
 	go func() {
-		_, _ = p.Goto(pageURL, playwright.PageGotoOptions{
-			WaitUntil: playwright.WaitUntilStateLoad,
-			Timeout:   playwright.Float(60000),
-		})
+		_ = p.Navigate(pageURL)
 	}()
 
 	select {

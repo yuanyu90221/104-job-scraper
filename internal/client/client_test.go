@@ -9,38 +9,60 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-rod/rod/lib/launcher"
 	"github.com/yuanyu90221/104-job-scraper/internal/models"
 )
 
-// TestChromiumLaunchOptions pins how the browser-channel spike (option B:
-// launch via a real installed Chrome instead of Playwright's bundled
-// Chromium) is wired, without requiring a real browser to be installed.
-func TestChromiumLaunchOptions(t *testing.T) {
-	t.Run("default channel launches bundled Chromium", func(t *testing.T) {
-		opts := chromiumLaunchOptions("")
-		if opts.Channel != nil {
-			t.Errorf("Channel = %v, want nil (bundled Chromium)", *opts.Channel)
+// TestBuildLaunchConfig pins how the browser-channel knob (option B: launch
+// via a real installed Chrome instead of go-rod's auto-resolved browser) is
+// wired, without requiring a real browser to be installed. lookPath is
+// injected so the "chrome" case doesn't depend on what's actually installed
+// on the machine running the test.
+func TestBuildLaunchConfig(t *testing.T) {
+	t.Run("default channel has no explicit binary requirement", func(t *testing.T) {
+		cfg, err := buildLaunchConfig("", launcher.LookPath)
+		if err != nil {
+			t.Fatalf("buildLaunchConfig(\"\") error = %v, want nil", err)
+		}
+		if cfg.binPath != "" {
+			t.Errorf("binPath = %q, want empty (let go-rod auto-resolve)", cfg.binPath)
 		}
 	})
 
-	t.Run("chrome channel launches real installed Chrome", func(t *testing.T) {
-		opts := chromiumLaunchOptions("chrome")
-		if opts.Channel == nil || *opts.Channel != "chrome" {
-			t.Errorf("Channel = %v, want %q", opts.Channel, "chrome")
+	t.Run("chrome channel resolves a real installed Chrome", func(t *testing.T) {
+		lookPath := func() (string, bool) { return "/usr/bin/google-chrome", true }
+		cfg, err := buildLaunchConfig("chrome", lookPath)
+		if err != nil {
+			t.Fatalf("buildLaunchConfig(\"chrome\") error = %v, want nil", err)
+		}
+		if cfg.binPath != "/usr/bin/google-chrome" {
+			t.Errorf("binPath = %q, want %q", cfg.binPath, "/usr/bin/google-chrome")
 		}
 	})
 
-	t.Run("stealth args are applied regardless of channel", func(t *testing.T) {
+	t.Run("chrome channel errors when no real Chrome is found", func(t *testing.T) {
+		lookPath := func() (string, bool) { return "", false }
+		_, err := buildLaunchConfig("chrome", lookPath)
+		if err == nil {
+			t.Fatal("buildLaunchConfig(\"chrome\") error = nil, want an error when no Chrome is found")
+		}
+	})
+
+	t.Run("stealth flags are applied regardless of channel", func(t *testing.T) {
 		for _, channel := range []string{"", "chrome"} {
-			opts := chromiumLaunchOptions(channel)
+			lookPath := func() (string, bool) { return "/usr/bin/google-chrome", true }
+			cfg, err := buildLaunchConfig(channel, lookPath)
+			if err != nil {
+				t.Fatalf("channel %q: buildLaunchConfig error = %v", channel, err)
+			}
 			found := false
-			for _, a := range opts.Args {
-				if a == "--disable-blink-features=AutomationControlled" {
+			for _, v := range cfg.flags["disable-blink-features"] {
+				if v == "AutomationControlled" {
 					found = true
 				}
 			}
 			if !found {
-				t.Errorf("channel %q: stealth args missing --disable-blink-features=AutomationControlled", channel)
+				t.Errorf("channel %q: stealth flags missing disable-blink-features=AutomationControlled, got %v", channel, cfg.flags)
 			}
 		}
 	})
