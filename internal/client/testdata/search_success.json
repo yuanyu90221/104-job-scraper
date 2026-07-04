@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "jobNo": "1234567890",
+      "jobName": "Golang 後端工程師",
+      "custName": "Example Co., Ltd.",
+      "custNo": "1a2b3c4",
+      "coIndustryDesc": "軟體及網路相關業",
+      "salaryHigh": 900000,
+      "salaryLow": 700000,
+      "appearDate": "20260701",
+      "jobAddrNoDesc": "台北市大安區",
+      "link": {
+        "job": "https://www.104.com.tw/job/example",
+        "cust": "https://www.104.com.tw/company/example"
+      },
+      "description": "test fixture job description"
+    }
+  ]
+}
