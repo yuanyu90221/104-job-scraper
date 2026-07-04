@@ -99,4 +99,4 @@ pants --changed-since=HEAD~1 --changed-dependents=transitive list
 
 ## 每日自動爬蟲
 
-`daily-scrape.yml` 每天 01:00 UTC（台灣時間 09:00）自動執行，也可以手動 `workflow_dispatch` 並自訂 `keyword` / `months` / `pages`。流程：checkout → build → 執行爬蟲 → 透過 LINE Messaging API 把前 10 筆結果推播出去 → 把完整結果 `jobs.json` 存成 30 天效期的 Artifact。推播需要三個 GitHub Secrets：`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_TARGET_ID`。
+`daily-scrape.yml` 每天 01:00 UTC（台灣時間 09:00）自動執行，也可以手動 `workflow_dispatch` 並自訂 `keyword` / `months` / `pages` / `line_top`。流程：checkout → build → 執行爬蟲 → 透過 LINE Messaging API 把前 `line_top` 筆結果推播出去（預設 10）→ 把完整結果 `jobs.json` 存成 30 天效期的 Artifact。推播需要三個 GitHub Secrets：`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_TARGET_ID`。

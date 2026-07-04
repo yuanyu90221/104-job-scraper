@@ -17,6 +17,10 @@ on:
         description: '爬取頁數'
         required: false
         default: '15'
+      line_top:
+        description: '推播到 LINE 的職缺筆數'
+        required: false
+        default: '10'
 
 jobs:
   scrape-and-notify:
@@ -47,11 +51,13 @@ jobs:
           KEYWORD="${{ github.event.inputs.keyword || 'golang 後端工程師' }}"
           MONTHS="${{ github.event.inputs.months || '3' }}"
           PAGES="${{ github.event.inputs.pages || '15' }}"
+          LINE_TOP="${{ github.event.inputs.line_top || '10' }}"
 
           echo "=== 搜尋條件 ==="
           echo "關鍵字: $KEYWORD"
           echo "時間範圍: 近 ${MONTHS} 個月"
           echo "最多頁數: $PAGES 頁"
+          echo "LINE 推播筆數: $LINE_TOP"
 
           mkdir -p output
           ./bin/104-job-scraper \
@@ -61,7 +67,7 @@ jobs:
             --pages="$PAGES" \
             --format=json \
             --output=output/jobs.json \
-            --line-top=10
+            --line-top="$LINE_TOP"
 
       - name: Check scrape result
         if: steps.scrape.outcome == 'failure'
