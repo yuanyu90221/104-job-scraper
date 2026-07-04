@@ -17,10 +17,6 @@ on:
         description: '爬取頁數'
         required: false
         default: '15'
-      browser_channel:
-        description: '瀏覽器 channel（留空=bundled Chromium，"chrome"=真實 Chrome，用於 A/B 驗證）'
-        required: false
-        default: ''
 
 jobs:
   scrape-and-notify:
@@ -30,9 +26,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Playwright browsers
-        run: go run github.com/mxschmitt/playwright-go/cmd/playwright install chromium chrome
-
       - name: Build binary
         run: go build -o bin/104-job-scraper ./cmd/main.go
 
@@ -41,7 +34,12 @@ jobs:
         continue-on-error: true
         env:
           DISPLAY: ':0'
-          SCRAPER_BROWSER_CHANNEL: ${{ github.event.inputs.browser_channel }}
+          # go-rod launches the runner's pre-installed Chrome rather than
+          # auto-downloading Chromium on every ephemeral run; the A/B
+          # investigation already showed browser channel doesn't affect
+          # Cloudflare's block rate, so this is fixed rather than exposed
+          # as an input.
+          SCRAPER_BROWSER_CHANNEL: chrome
         run: |
           KEYWORD="${{ github.event.inputs.keyword || 'golang 後端工程師' }}"
           MONTHS="${{ github.event.inputs.months || '3' }}"
@@ -51,7 +49,6 @@ jobs:
           echo "關鍵字: $KEYWORD"
           echo "時間範圍: 近 ${MONTHS} 個月"
           echo "最多頁數: $PAGES 頁"
-          echo "瀏覽器 channel: ${SCRAPER_BROWSER_CHANNEL:-<bundled chromium>}"
 
           mkdir -p output
           ./bin/104-job-scraper \

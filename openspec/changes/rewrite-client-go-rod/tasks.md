@@ -30,10 +30,10 @@
 
 ## 6. Cutover
 
-- [ ] 6.1 Update `.github/workflows/daily-scrape.yml`'s browser-install step for go-rod's requirements (rely on auto-download, or install/point at system Chrome), per `design.md`'s Migration Plan and Open Questions
-- [ ] 6.2 Retire the `browser_channel` `workflow_dispatch` input (superseded by go-rod's channel handling; the Playwright-fingerprint A/B question it existed for is already answered)
-- [ ] 6.3 Replace `cmd/debug_playwright/main.go` with a go-rod equivalent, or delete it if no longer needed
-- [ ] 6.4 Remove `github.com/mxschmitt/playwright-go` from `go.mod`/`go.sum` (`go mod tidy`)
+- [x] 6.1 Update `.github/workflows/daily-scrape.yml`'s browser-install step for go-rod's requirements (rely on auto-download, or install/point at system Chrome), per `design.md`'s Migration Plan and Open Questions — removed the "Install Playwright browsers" step entirely and hardcoded `SCRAPER_BROWSER_CHANNEL=chrome` on the run step: go-rod's default (unset-channel) resolution only checks its own managed cache dir and downloads a pinned Chromium on a cache miss (confirmed by reading `launcher.Browser.Get()`/`getBin()` in the pinned go-rod source — it never consults `$PATH`), which would mean a fresh Chromium download on every ephemeral GitHub-hosted run; forcing the `chrome` channel makes go-rod use `launcher.LookPath()` against the runner's pre-installed Google Chrome instead, avoiding that per-run download cost
+- [x] 6.2 Retire the `browser_channel` `workflow_dispatch` input (superseded by go-rod's channel handling; the Playwright-fingerprint A/B question it existed for is already answered) — removed the input; the channel is now fixed to `chrome` in the workflow rather than user-selectable, since the A/B question it existed for (fingerprint vs. Cloudflare block rate) is already answered and the remaining channel concern (CI download latency) doesn't need to be user-facing
+- [x] 6.3 Replace `cmd/debug_playwright/main.go` with a go-rod equivalent, or delete it if no longer needed — deleted `cmd/debug_playwright/` outright; it was a manual playwright-go-only debugging spike tool with no remaining purpose now that go-rod is the only automation engine and manual production validation is already covered by 5.1
+- [x] 6.4 Remove `github.com/mxschmitt/playwright-go` from `go.mod`/`go.sum` (`go mod tidy`) — ran `go mod tidy`; `go.mod`/`go.sum` no longer reference `playwright-go` anywhere
 - [ ] 6.5 Dispatch `daily-scrape.yml` once on the real GitHub-hosted runner to confirm the go-rod build behaves at parity with the playwright-go baseline (pass/fail parity is success — this spike is not expected to fix IP-reputation blocking)
 
 ## 7. Follow-up
