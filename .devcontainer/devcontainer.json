@@ -1,6 +1,9 @@
 {
   "name": "104-job-scraper (Pants tutorial)",
   "image": "mcr.microsoft.com/devcontainers/go:1.25-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {}
+  },
   "postCreateCommand": "curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.bashrc && \"$HOME/.local/bin/pants\" --no-pantsd version && bash scripts/patch-pants-go.sh",
   "customizations": {
     "vscode": {
