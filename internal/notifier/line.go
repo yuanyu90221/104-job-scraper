@@ -2,31 +2,37 @@ package notifier
 
 import (
 	"fmt"
-	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
+	"github.com/line/line-bot-sdk-go/v7/linebot"
 	"github.com/yuanyu90221/104-job-scraper/internal/models"
 )
 
-const lineNotifyURL = "https://notify-api.line.me/api/notify"
+// maxMessageLen is the LINE Messaging API's text message length limit.
+const maxMessageLen = 5000
 
-// LineNotifier sends job summaries to LINE via LINE Notify.
+// LineNotifier sends job summaries to LINE via the Messaging API's push
+// message, pushing to a single fixed target (a userId or groupId).
 type LineNotifier struct {
-	token  string
-	client *http.Client
+	client   *linebot.Client
+	targetID string
 }
 
-// NewLine creates a LineNotifier with the given LINE Notify token.
-func NewLine(token string) *LineNotifier {
-	return &LineNotifier{
-		token:  token,
-		client: &http.Client{Timeout: 10 * time.Second},
+// NewLine creates a LineNotifier that pushes messages to targetID using the
+// given Messaging API channel secret and access token. channelSecret is
+// required by linebot.New but unused for push messages (it only matters for
+// verifying inbound webhook signatures, which this notifier never receives).
+func NewLine(channelSecret, channelToken, targetID string, options ...linebot.ClientOption) (*LineNotifier, error) {
+	client, err := linebot.New(channelSecret, channelToken, options...)
+	if err != nil {
+		return nil, fmt.Errorf("new line client: %w", err)
 	}
+	return &LineNotifier{client: client, targetID: targetID}, nil
 }
 
-// Send formats up to topN jobs into a LINE Notify message and posts it.
+// Send formats up to topN jobs into a LINE message and pushes it to the
+// configured target.
 func (n *LineNotifier) Send(jobs []models.Job, keyword string, topN int) error {
 	if topN <= 0 || topN > len(jobs) {
 		topN = len(jobs)
@@ -80,31 +86,12 @@ func formatDate(d string) string {
 }
 
 func (n *LineNotifier) post(message string) error {
-	const maxLen = 1000
-	if len([]rune(message)) > maxLen {
-		runes := []rune(message)
-		message = string(runes[:maxLen-3]) + "..."
+	if runes := []rune(message); len(runes) > maxMessageLen {
+		message = string(runes[:maxMessageLen-3]) + "..."
 	}
 
-	form := url.Values{}
-	form.Set("message", message)
-
-	req, err := http.NewRequest(http.MethodPost, lineNotifyURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return fmt.Errorf("build line notify request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Authorization", "Bearer "+n.token)
-
-	resp, err := n.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("line notify post: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("line notify returned status %d", resp.StatusCode)
+	if _, err := n.client.PushMessage(n.targetID, linebot.NewTextMessage(message)).Do(); err != nil {
+		return fmt.Errorf("line push message: %w", err)
 	}
 
 	return nil

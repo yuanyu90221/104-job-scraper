@@ -21,15 +21,17 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	var (
-		keyword    string
-		area       string
-		days       int
-		months     int
-		pages      int
-		format     string
-		outputFile string
-		lineToken  string
-		lineTopN   int
+		keyword           string
+		area              string
+		days              int
+		months            int
+		pages             int
+		format            string
+		outputFile        string
+		lineChannelSecret string
+		lineChannelToken  string
+		lineTargetID      string
+		lineTopN          int
 	)
 
 	cmd := &cobra.Command{
@@ -41,9 +43,9 @@ func newRootCmd() *cobra.Command {
   104-job-scraper
   104-job-scraper --keyword="golang 後端工程師" --months=3 --format=table
   104-job-scraper --keyword="golang" --area=6001001000 --format=json
-  104-job-scraper --keyword="golang 後端工程師" --line-token=<TOKEN> --line-top=10`,
+  104-job-scraper --keyword="golang 後端工程師" --line-channel-secret=<SECRET> --line-channel-token=<TOKEN> --line-target-id=<ID> --line-top=10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(keyword, area, days, months, pages, formatter.Format(format), outputFile, lineToken, lineTopN)
+			return run(keyword, area, days, months, pages, formatter.Format(format), outputFile, lineChannelSecret, lineChannelToken, lineTargetID, lineTopN)
 		},
 	}
 
@@ -55,13 +57,20 @@ func newRootCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&pages, "pages", "p", 15, "最多爬取幾頁 (每頁 20 筆)；三個月建議 15 頁以上")
 	cmd.Flags().StringVarP(&format, "format", "f", "table", "輸出格式: table, json, csv")
 	cmd.Flags().StringVarP(&outputFile, "output", "o", "", "輸出到檔案 (預設輸出至 stdout)")
-	cmd.Flags().StringVar(&lineToken, "line-token", "", "LINE Notify token，設定後自動傳送摘要至 LINE bot")
+	cmd.Flags().StringVar(&lineChannelSecret, "line-channel-secret", os.Getenv("LINE_CHANNEL_SECRET"), "LINE Messaging API channel secret，設定後自動傳送摘要至 LINE（預設讀取環境變數 LINE_CHANNEL_SECRET）")
+	cmd.Flags().StringVar(&lineChannelToken, "line-channel-token", os.Getenv("LINE_CHANNEL_ACCESS_TOKEN"), "LINE Messaging API channel access token，設定後自動傳送摘要至 LINE（預設讀取環境變數 LINE_CHANNEL_ACCESS_TOKEN）")
+	cmd.Flags().StringVar(&lineTargetID, "line-target-id", os.Getenv("LINE_TARGET_ID"), "LINE 推播目標的 userId 或 groupId（預設讀取環境變數 LINE_TARGET_ID）")
 	cmd.Flags().IntVar(&lineTopN, "line-top", 10, "傳送到 LINE 的前 N 筆職缺數量")
 
 	return cmd
 }
 
-func run(keyword, area string, days, months, pages int, format formatter.Format, outputFile, lineToken string, lineTopN int) error {
+func run(keyword, area string, days, months, pages int, format formatter.Format, outputFile, lineChannelSecret, lineChannelToken, lineTargetID string, lineTopN int) error {
+	if lineChannelToken != "" && lineTargetID == "" {
+		return fmt.Errorf("設定 --line-channel-token 時必須同時提供 --line-target-id")
+	}
+
+
 	params := models.SearchParams{
 		Keyword: keyword,
 		Area:    area,
@@ -114,10 +123,13 @@ func run(keyword, area string, days, months, pages int, format formatter.Format,
 		return err
 	}
 
-	// 傳送摘要至 LINE bot
-	if lineToken != "" {
-		ln := notifier.NewLine(lineToken)
-		fmt.Fprintf(os.Stderr, "傳送前 %d 筆職缺至 LINE bot...\n", lineTopN)
+	// 傳送摘要至 LINE
+	if lineChannelToken != "" {
+		ln, err := notifier.NewLine(lineChannelSecret, lineChannelToken, lineTargetID)
+		if err != nil {
+			return fmt.Errorf("初始化 LINE 通知: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "傳送前 %d 筆職缺至 LINE...\n", lineTopN)
 		if err := ln.Send(jobs, keyword, lineTopN); err != nil {
 			return fmt.Errorf("LINE 通知失敗: %w", err)
 		}

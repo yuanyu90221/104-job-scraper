@@ -40,6 +40,9 @@ jobs:
           # Cloudflare's block rate, so this is fixed rather than exposed
           # as an input.
           SCRAPER_BROWSER_CHANNEL: chrome
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_TARGET_ID: ${{ secrets.LINE_TARGET_ID }}
         run: |
           KEYWORD="${{ github.event.inputs.keyword || 'golang 後端工程師' }}"
           MONTHS="${{ github.event.inputs.months || '3' }}"
@@ -58,7 +61,6 @@ jobs:
             --pages="$PAGES" \
             --format=json \
             --output=output/jobs.json \
-            --line-token="${{ secrets.LINE_NOTIFY_TOKEN }}" \
             --line-top=10
 
       - name: Check scrape result
