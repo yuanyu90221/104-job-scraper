@@ -34,8 +34,8 @@
 ## 5. Validation
 
 - [x] 5.1 Confirm `go build ./...`, `go vet ./...`, and `go test ./...` succeed repo-wide after the rewrite — all pass (client 47.154s, search 9.839s, notifier/formatter instant)
-- [ ] 5.2 Manually run the CLI once with real Messaging API credentials (channel secret/token reused from the `egg-village-platform` LINE Bot channel per the user's decision) and a real target ID, confirming a job summary message actually arrives in LINE — blocked on the user provisioning/sharing real credentials; not runnable by the agent
-- [ ] 5.3 Once GitHub secrets `LINE_CHANNEL_SECRET`/`LINE_CHANNEL_ACCESS_TOKEN`/`LINE_TARGET_ID` are set by the user, dispatch `daily-scrape.yml` once to confirm the full pipeline (scrape → notify) succeeds end-to-end in CI — blocked on 5.2
+- [x] 5.2 Manually run the CLI once with real Messaging API credentials (channel secret/token reused from the `egg-village-platform` LINE Bot channel per the user's decision) and a real target ID, confirming a job summary message actually arrives in LINE — ran `./bin/104-job-scraper --months=1 --pages=1 --line-top=5` with `.env` credentials sourced into the environment; found 22 jobs, pushed top 5, user confirmed receipt in LINE
+- [x] 5.3 Once GitHub secrets `LINE_CHANNEL_SECRET`/`LINE_CHANNEL_ACCESS_TOKEN`/`LINE_TARGET_ID` are set by the user, dispatch `daily-scrape.yml` once to confirm the full pipeline (scrape → notify) succeeds end-to-end in CI — first dispatch (run 28717872689) failed because the commit hadn't been pushed to `origin/main` yet, so CI ran the old LINE-Notify code; after `git push origin main`, re-dispatched (run 28717936439) and it completed with all steps `success`
 
 ## 6. Follow-up
 

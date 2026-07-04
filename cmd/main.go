@@ -70,7 +70,6 @@ func run(keyword, area string, days, months, pages int, format formatter.Format,
 		return fmt.Errorf("設定 --line-channel-token 時必須同時提供 --line-target-id")
 	}
 
-
 	params := models.SearchParams{
 		Keyword: keyword,
 		Area:    area,
