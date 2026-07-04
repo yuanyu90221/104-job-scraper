@@ -96,3 +96,7 @@ jobs:
           name: daily-jobs-${{ github.run_id }}
           path: output/jobs.json
           retention-days: 30
+
+      - name: Fail job if scrape failed
+        if: steps.scrape.outcome == 'failure'
+        run: exit 1
