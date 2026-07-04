@@ -1,6 +1,6 @@
 ## 1. Devcontainer
 
-- [x] 1.1 Create `.devcontainer/devcontainer.json` using the `mcr.microsoft.com/devcontainers/go:1-1.25` image
+- [x] 1.1 Create `.devcontainer/devcontainer.json` using the `mcr.microsoft.com/devcontainers/go:1.25-bookworm` image
 - [x] 1.2 Add `postCreateCommand` that installs Pants (`get-pants.sh`) and runs `scripts/patch-pants-go.sh`
 - [ ] 1.3 Open a Codespace from this branch and verify `pants list ::`, `pants dependencies internal/search::`, and `pants --changed-since=HEAD~1 --changed-dependents=transitive list` all run without manual setup
 

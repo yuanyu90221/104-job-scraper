@@ -16,7 +16,7 @@ The repo's three teaching workflows (`01-pants-list.yml`, `02-full-build.yml`, `
 
 ## Decisions
 
-1. **Base image**: use the official `mcr.microsoft.com/devcontainers/go:1-1.25` devcontainer image instead of a custom Dockerfile.
+1. **Base image**: use the official `mcr.microsoft.com/devcontainers/go:1.25-bookworm` devcontainer image instead of a custom Dockerfile.
    Alternative considered: hand-rolled Dockerfile installing Go manually — rejected, more to maintain and the official image already matches `go.mod`'s `go 1.25.0`.
 
 2. **Pants installation**: install Pants and apply the patch via `postCreateCommand` (shell one-liners calling `get-pants.sh` then `scripts/patch-pants-go.sh`), rather than baking Pants into a custom image layer.
