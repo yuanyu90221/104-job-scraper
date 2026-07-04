@@ -147,15 +147,31 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 	respCh := make(chan *models.SearchResponse, 1)
 	errCh := make(chan error, 1)
 
+	pageURL := buildURL(c.baseURL, params)
+
+	// isRelevant reports whether a response is either the page navigation
+	// itself or the search API call — the only two requests that matter for
+	// this search. The page fires other subresource/widget ajax calls (e.g.
+	// a keyword-suggest autocomplete) that can independently get a
+	// Cloudflare 403 without the actual search being blocked; those must
+	// not abort the search.
+	isRelevant := func(url string) bool {
+		return url == pageURL || strings.Contains(url, "/search/api/jobs")
+	}
+
 	p.On("response", func(r playwright.Response) {
 		status := r.Status()
 		headers := r.Headers()
+		url := r.URL()
 
 		if status == 403 {
+			if !isRelevant(url) {
+				return
+			}
 			body, _ := r.Body()
 			if isCloudflareChallenge(status, headers, body) {
 				select {
-				case errCh <- fmt.Errorf("%s: %w", r.URL(), ErrCloudflareChallenge):
+				case errCh <- fmt.Errorf("%s: %w", url, ErrCloudflareChallenge):
 				default:
 				}
 			}
@@ -168,7 +184,7 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		if !strings.Contains(ct, "json") {
 			return
 		}
-		if !strings.Contains(r.URL(), "/search/api/jobs") {
+		if !strings.Contains(url, "/search/api/jobs") {
 			return
 		}
 		body, err := r.Body()
@@ -188,7 +204,6 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		}
 	})
 
-	pageURL := buildURL(c.baseURL, params)
 	go func() {
 		_, _ = p.Goto(pageURL, playwright.PageGotoOptions{
 			WaitUntil: playwright.WaitUntilStateLoad,

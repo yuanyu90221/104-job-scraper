@@ -147,6 +147,57 @@ func TestSearch_DetectsCloudflareChallenge(t *testing.T) {
 	}
 }
 
+// TestSearch_IgnoresUnrelatedCloudflare403 reproduces a real 2026-07-04 CI
+// failure: the search page's own JS fires an unrelated ajax call (a
+// keyword-suggest autocomplete widget) that Cloudflare 403'd, while the
+// actual search API call succeeded moments later. Search must not treat an
+// unrelated subresource's block as a block of the whole search.
+func TestSearch_IgnoresUnrelatedCloudflare403(t *testing.T) {
+	challengeBody, err := os.ReadFile("testdata/cloudflare_challenge.html")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	successBody, err := os.ReadFile("testdata/search_success.json")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/search/api/jobs"):
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(successBody)
+		case strings.Contains(r.URL.Path, "/ajax/KeywordSuggest"):
+			w.Header().Set("Cf-Mitigated", "challenge")
+			w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write(challengeBody)
+		default:
+			w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+			fmt.Fprint(w, `<html><body><script>
+				fetch("ajax/KeywordSuggest");
+				fetch("api/jobs");
+			</script></body></html>`)
+		}
+	}))
+	defer srv.Close()
+
+	c, err := New()
+	if err != nil {
+		t.Skip("skipping: browser init requires network:", err)
+	}
+	defer c.Close()
+	c.baseURL = srv.URL + "/jobs/search/"
+
+	resp, err := c.Search(models.SearchParams{Keyword: "golang", Page: 1})
+	if err != nil {
+		t.Fatalf("Search() unexpected error: %v, want success despite unrelated 403", err)
+	}
+	if len(resp.Data) == 0 {
+		t.Fatal("Search() returned no jobs, want at least 1 from fixture")
+	}
+}
+
 // TestSearch_ReturnsJobsOnSuccess mirrors the challenge test but replays a
 // page whose own JS fetches the search API and gets a normal JSON response,
 // proving Search still works when nothing blocks it.
