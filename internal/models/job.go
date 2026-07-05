@@ -20,6 +20,11 @@ type Job struct {
 	Description    string  `json:"description"`
 }
 
+// String returns a short "<JobNo> <JobName>" identifier for logging.
+func (j Job) String() string {
+	return j.JobNo + " " + j.JobName
+}
+
 // JobLink holds URLs for the job listing and company page.
 type JobLink struct {
 	Job  string `json:"job"`
