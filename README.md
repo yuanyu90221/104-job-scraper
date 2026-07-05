@@ -95,6 +95,10 @@ set -a && source .env && set +a
    4. 不用手動刷新或重新觸發任何東西——留言是同一則「sticky comment」，每次 push 完 workflow 跑完就會自動更新內容，不會愈刷愈多則。
    5. 想重新從關卡一開始體驗，開一個全新的 PR 即可（快取 key 是每個 PR 各自獨立的）。
 
+   > 想要不改任何程式碼、只是快速跑一次看看導師留言長什麼樣子？參考
+   > [`docs/pr-mentor-trial-guide.md`](docs/pr-mentor-trial-guide.md)，裡面示範用空
+   > commit 開一個測試用 PR，看完留言就關閉、不用合併。
+
 另外 `pants-ci.yml` 是實際跑在每次 push / PR 上的 CI：一個 job 用純 `go test`/`go vet`/`go build` 把關，另一個 job 用 Pants 重跑一次（`pants list ::` + `pants package cmd:bin`），驗證 Pants 設定本身沒有壞掉。
 
 ### 建議的操作順序
