@@ -1,0 +1,51 @@
+name: 建立 Release（打 tag 並產生 Release Note）
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版號（格式 vX.Y.Z，例如 v1.0.0）'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 打 tag 並發布 GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 顯示目前最新 tag
+        run: |
+          echo "目前最新 tag：$(git describe --tags --abbrev=0 2>/dev/null || echo '(尚無 tag)')"
+
+      - name: 驗證版號格式與唯一性
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::版號格式錯誤，需為 vX.Y.Z，例如 v1.0.0（收到：$VERSION）"
+            exit 1
+          fi
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "::error::tag $VERSION 已經存在"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: 建立並推送 tag
+        run: |
+          git tag "$VERSION"
+          git push origin "$VERSION"
+
+      - name: 建立 GitHub Release（自動依 commit / PR 產生 Release Note）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --generate-notes
