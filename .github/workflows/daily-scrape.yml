@@ -2,7 +2,7 @@ name: Daily 104 Job Scrape - golang 後端工程師
 
 on:
   schedule:
-    - cron: '0 1 * * *'
+    - cron: '7 1 * * *'
   workflow_dispatch:
     inputs:
       keyword:
