@@ -12,16 +12,21 @@
 - [x] 2.1 Add the `actions/cache@v4` step with `id: cache`, path `~/.cache/pants/lmdb_store`, key
       `pants-lmdb-tutorial-pr${{ github.event.pull_request.number }}-${{ github.sha }}`, restore-keys
       `pants-lmdb-tutorial-pr${{ github.event.pull_request.number }}-`.
-- [ ] 2.2 Verify (via a scratch PR) that a brand-new PR number produces `cache-hit != 'true'` on its
-      first run, satisfying the "PR-scoped Pants cache isolation" spec's first scenario.
+- [x] 2.2 Verify (via a scratch PR) that a brand-new PR number produces `cache-hit != 'true'` on its
+      first run, satisfying the "PR-scoped Pants cache isolation" spec's first scenario. Confirmed
+      live on PR #1 (`test/pr-mentor-walkthrough`): first run was a genuine cold build (~131s).
 
 ## 3. Stage detection
 
 - [x] 3.1 Add a `detect` step that captures `pants --changed-since=<base_sha>
       --changed-dependents=transitive list` output via `$GITHUB_OUTPUT` (multi-line-safe heredoc).
-- [x] 3.2 Implement the classification rule in shell: `cache-hit != 'true'` → `stage_1`; else
-      contains `//internal/models` → `stage_3`; else contains `//internal/notifier` or
-      `//internal/formatter` → `stage_2`; else → `other`. Expose as `steps.detect.outputs.stage`.
+- [x] 3.2 Implement the classification rule in shell: `github.event.action == 'opened'` → `stage_1`;
+      else contains `(//)?internal/models` → `stage_3`; else contains `(//)?internal/(notifier|
+      formatter)` → `stage_2`; else → `other`. Expose as `steps.detect.outputs.stage`. **Revised
+      during live verification**: the originally planned `cache-hit != 'true'` signal turned out to
+      always be false after the first push (the cache key embeds `github.sha`), and this repo's real
+      `pants ... list` output has no leading `//` — see `design.md` Decision 2 and updated
+      `specs/pr-mentor/spec.md`.
 - [x] 3.3 Add unit-style verification: for each of the 4 branches, manually run the shell classifier
       logic locally against fixture `CHANGED`/`cache-hit` values and confirm the expected stage.
 
@@ -43,8 +48,9 @@
       plan, with real `ELAPSED` seconds and real changed-target list substituted in; embed the
       `<!-- pant-mentor -->` marker in the body.
 - [x] 5.3 Call `updateComment` if a marked comment was found, else `createComment`.
-- [ ] 5.4 Verify via a scratch PR with two pushes that only one comment exists after both runs and its
-      content reflects the second run's stage.
+- [x] 5.4 Verify via a scratch PR with two pushes that only one comment exists after both runs and its
+      content reflects the second run's stage. Confirmed live on PR #1: the same comment id
+      (`4885142601`) was updated in place across 4 runs (stage_1 → other → stage_2 → stage_3).
 
 ## 6. Documentation
 
@@ -56,15 +62,18 @@
 
 ## 7. End-to-end verification
 
-- [ ] 7.1 Open a scratch PR touching an unrelated/no file (or trivial doc change) → confirm the
-      mentor comment shows Stage 1 (cold, full build).
-- [ ] 7.2 Push a commit to that PR changing only `internal/notifier/line.go` (add the debug
+- [x] 7.1 Open a scratch PR touching an unrelated/no file (or trivial doc change) → confirm the
+      mentor comment shows Stage 1 (cold, full build). Done on PR #1 (`test/pr-mentor-walkthrough`).
+- [x] 7.2 Push a commit to that PR changing only `internal/notifier/line.go` (add the debug
       `fmt.Fprintf` line from the plan) → confirm the comment updates to Stage 2 and lists
       `models`/`client`/`formatter`/`search` as cache-hit.
-- [ ] 7.3 Push a further commit changing only `internal/models/job.go` (add the `String()` method from
+- [x] 7.3 Push a further commit changing only `internal/models/job.go` (add the `String()` method from
       the plan) → confirm the comment updates to Stage 3 and lists all dependent packages as rebuilt.
-- [ ] 7.4 Confirm exactly one bot comment existed throughout steps 7.1–7.3 (updated in place, not
+- [x] 7.4 Confirm exactly one bot comment existed throughout steps 7.1–7.3 (updated in place, not
       recreated).
 - [x] 7.5 Diff `01-pants-list.yml`, `02-full-build.yml`, `03-incremental.yml`, `pants-ci.yml` against
       their pre-change versions and confirm zero changes.
-- [ ] 7.6 Close/clean up the scratch PR and branch used for 7.1–7.5.
+- [x] 7.6 Close/clean up the scratch PR and branch used for 7.1–7.5. PR #1 closed (not merged),
+      `test/pr-mentor-walkthrough` deleted both locally and on `origin`. The two example-edit commits
+      made for this walkthrough are intentionally excluded from the real delivery branch
+      (`feat/pr-mentor-workflow`), which carries only the workflow + the two bugfixes found here.
