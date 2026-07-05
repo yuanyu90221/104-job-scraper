@@ -46,12 +46,19 @@ jobs:
           esac
 
           VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "下一版版號：$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: 驗證版號格式與唯一性
+        run: |
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::計算出的版號「$VERSION」不符合 vX.Y.Z 格式"
+            exit 1
+          fi
           if git rev-parse "$VERSION" >/dev/null 2>&1; then
             echo "::error::tag $VERSION 已經存在"
             exit 1
           fi
-          echo "下一版版號：$VERSION"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: 建立並推送 tag
         run: |

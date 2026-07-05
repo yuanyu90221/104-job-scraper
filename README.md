@@ -72,6 +72,22 @@ set -a && source .env && set +a
 - **[PR 導師 Workflow](https://github.com/yuanyu90221/104-job-scraper/wiki/PR-導師-Workflow)** — Step 4 自動化互動教學、關卡判斷規則
 - **[GitHub Codespaces 練習環境](https://github.com/yuanyu90221/104-job-scraper/wiki/GitHub-Codespaces-練習環境)** — 免安裝的互動式練習環境
 
+## 版本號與 Release
+
+版號格式採用 [Semantic Versioning](https://semver.org/lang/zh-TW/)：`vMAJOR.MINOR.PATCH`（例如 `v1.2.3`）。
+
+發版由 `.github/workflows/release.yml` 手動觸發（`workflow_dispatch`），**不需要手動輸入完整版號**：
+workflow 會自動讀取目前最新的 git tag（尚無任何 tag 時視為 `v0.0.0`），再依你選擇的升級方式算出下一版：
+
+| 升級方式 | 規則 | 範例（目前最新 tag 為 `v1.2.3`） |
+| --- | --- | --- |
+| `patch` | 只有 PATCH +1，MAJOR/MINOR 不變 | `v1.2.3` → `v1.2.4` |
+| `minor` | MINOR +1、PATCH 歸零 | `v1.2.3` → `v1.3.0` |
+| `major` | MAJOR +1、MINOR 與 PATCH 歸零 | `v1.2.3` → `v2.0.0` |
+
+計算出下一版後，workflow 會驗證版號格式與是否重複，接著建立並推送該 tag，並用
+`gh release create --generate-notes` 依這段期間合併的 PR 自動產生 GitHub Release 的 Release Note。
+
 ## 每日自動爬蟲
 
 `daily-scrape.yml` 每天 01:00 UTC（台灣時間 09:00）自動執行，也可以手動 `workflow_dispatch` 並自訂 `keyword` / `months` / `pages` / `line_top`。流程：checkout → build → 執行爬蟲 → 透過 LINE Messaging API 把前 `line_top` 筆結果推播出去（預設 10）→ 把完整結果 `jobs.json` 存成 30 天效期的 Artifact。推播需要三個 GitHub Secrets：`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_TARGET_ID`。
