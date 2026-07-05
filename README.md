@@ -85,6 +85,16 @@ set -a && source .env && set +a
    真實的 `pants test` 耗時，不是模擬數據；快取 key 也是每個 PR 各自獨立（`pants-lmdb-tutorial-pr<PR
    編號>-...`），所以每個新 PR 都會重新體驗一次「關卡一」的冷啟動。
 
+   **如何使用（不用手動觸發，開 PR 就會自動跑）：**
+   1. 從 `main` 開一個新分支，push 上去後對著 `main` 開一個 PR（不需要任何額外設定）。
+   2. PR 一開起來，`04-pr-mentor.yml` 會自動被 `pull_request` 事件觸發並開始執行；等它跑完，
+      PR 底下會自動出現一則導師留言（第一次通常是「關卡一：全量 build」，因為這個 PR 的快取還是空的）。
+   3. 在同一個分支上繼續修改程式碼並 push 新 commit：
+      - 只改 `internal/notifier/line.go`（或 `internal/formatter`）→ 下次留言會更新成「關卡二」。
+      - 改 `internal/models/job.go` → 下次留言會更新成「關卡三」（fan-in 最高，全部套件重建）。
+   4. 不用手動刷新或重新觸發任何東西——留言是同一則「sticky comment」，每次 push 完 workflow 跑完就會自動更新內容，不會愈刷愈多則。
+   5. 想重新從關卡一開始體驗，開一個全新的 PR 即可（快取 key 是每個 PR 各自獨立的）。
+
 另外 `pants-ci.yml` 是實際跑在每次 push / PR 上的 CI：一個 job 用純 `go test`/`go vet`/`go build` 把關，另一個 job 用 Pants 重跑一次（`pants list ::` + `pants package cmd:bin`），驗證 Pants 設定本身沒有壞掉。
 
 ### 建議的操作順序
