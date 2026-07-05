@@ -43,11 +43,20 @@ approved plan this change implements).
    first PR would almost never observe a genuine cache miss, breaking the Stage 1 narrative.
 
 2. **Stage classification driven by two real signals, not a fixed embedded rulebook.**
-   `steps.cache.outputs.cache-hit` decides cold-vs-warm; when warm, the *actual* target list from
+   `github.event.action` (`opened` vs `synchronize`) decides cold-vs-warm; when not the initial
+   `opened` event, the *actual* target list from
    `pants --changed-since=<base_sha> --changed-dependents=transitive list` decides leaf-vs-common
-   vs-other. Alternative considered: classify purely from `git diff --name-only` path substrings
+   vs-other. Alternative considered #1: classify purely from `git diff --name-only` path substrings
    (closer to the user's original draft). Rejected in favor of using Pants' own target resolution,
    since it is the same signal the build itself uses and stays correct if BUILD structure changes.
+   Alternative considered #2 (originally implemented, found broken during end-to-end verification):
+   gate cold-vs-warm on `steps.cache.outputs.cache-hit`. Rejected because that output only reports
+   `true` on an *exact* primary-key match; since the cache key embeds `github.sha`, every push after
+   the first gets a new sha and therefore a new primary key, so `cache-hit` reports `false` on every
+   subsequent push even though `restore-keys` already restored a warm LMDB store from the prior push
+   (confirmed live: the second push's `pants test ::` finished in ~2s yet was still misclassified as
+   Stage 1). `github.event.action` has no such false-negative and is the signal GitHub itself uses to
+   distinguish "PR just opened" from "PR updated."
 
 3. **Sticky comment via hidden marker, not `createComment` per push.**
    Use `<!-- pant-mentor -->` as a hidden HTML comment marker; on each run, list existing comments via

@@ -54,7 +54,12 @@ jobs:
           echo "$CHANGED" >> "$GITHUB_OUTPUT"
           echo "PANT_MENTOR_EOF" >> "$GITHUB_OUTPUT"
 
-          if [ "${{ steps.cache.outputs.cache-hit }}" != "true" ]; then
+          # github.event.action (opened vs synchronize) is the reliable cold/warm
+          # signal here, not actions/cache's cache-hit output: our cache key embeds
+          # github.sha, so cache-hit only reports true on an exact re-run of the same
+          # commit. Every subsequent push reports cache-hit=false even though
+          # restore-keys already pulled in a warm LMDB store from the prior push.
+          if [ "${{ github.event.action }}" = "opened" ]; then
             STAGE=stage_1
           elif echo "$CHANGED" | grep -q '^//internal/models'; then
             STAGE=stage_3
