@@ -35,3 +35,7 @@ type SearchParams struct {
 	Order   int // 1=relevance, 2=date, 13=salary
 	Asc     int // 0=desc, 1=asc
 }
+
+func (j Job) String() string {
+	return j.JobNo + " " + j.JobName
+}
