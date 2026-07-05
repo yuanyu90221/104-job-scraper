@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -89,6 +90,8 @@ func (n *LineNotifier) post(message string) error {
 	if runes := []rune(message); len(runes) > maxMessageLen {
 		message = string(runes[:maxMessageLen-3]) + "..."
 	}
+
+	fmt.Fprintf(os.Stderr, "line: pushing message (%d runes)\n", len([]rune(message)))
 
 	if _, err := n.client.PushMessage(n.targetID, linebot.NewTextMessage(message)).Do(); err != nil {
 		return fmt.Errorf("line push message: %w", err)
