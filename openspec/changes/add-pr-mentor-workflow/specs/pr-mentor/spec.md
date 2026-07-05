@@ -14,32 +14,39 @@ number, distinct from the shared cache key used by `01-pants-list.yml`, `03-incr
 #### Scenario: Subsequent push in the same PR reuses that PR's own cache
 - **WHEN** a second commit is pushed to a pull request that already produced a cache entry under
   `pants-lmdb-tutorial-pr<PR number>-`
-- **THEN** the cache restore step matches that PR-scoped entry via `restore-keys`, and the workflow
-  treats the run as warm-cache (not Stage 1)
+- **THEN** the cache restore step matches that PR-scoped entry via `restore-keys` and populates the
+  LMDB store from the prior push, measurably speeding up that push's `pants test` run (even though
+  `cache-hit` itself reports `false`, since the key's `github.sha` component differs from the prior
+  push's commit)
 
 ### Requirement: Stage classification from real Pants signals
 The workflow SHALL classify each run into exactly one stage — `stage_1` (cold full build), `stage_2`
 (leaf package changed), `stage_3` (common package changed), or `other` — using only the real
-cache-hit flag and the real output of
+`github.event.action` (`opened` vs `synchronize`) and the real output of
 `pants --changed-since=<base_sha> --changed-dependents=transitive list`. The workflow SHALL NOT use a
-simulated/hardcoded build log or call an external LLM to perform this classification.
+simulated/hardcoded build log or call an external LLM to perform this classification. The workflow
+SHALL NOT use `actions/cache`'s `cache-hit` output as the cold/warm signal, since that output only
+reports `true` on an exact primary-key match and the cache key embeds `github.sha`, making it `false`
+on every push after the first regardless of whether the LMDB store was actually warm.
 
-#### Scenario: Cold cache always yields Stage 1 regardless of changed files
-- **WHEN** the Pants cache restore step reports no cache hit
+#### Scenario: PR-opened event always yields Stage 1 regardless of changed files
+- **WHEN** the triggering event's `action` is `opened`
 - **THEN** the workflow selects `stage_1`, independent of which files changed in the PR
 
 #### Scenario: Leaf package change yields Stage 2
-- **WHEN** the cache is warm and the changed-target list includes `//internal/notifier` or
-  `//internal/formatter` but not `//internal/models`
+- **WHEN** the triggering event's `action` is `synchronize` and the changed-target list includes
+  `//internal/notifier` or `//internal/formatter` but not `//internal/models`
 - **THEN** the workflow selects `stage_2`
 
 #### Scenario: Common package change yields Stage 3
-- **WHEN** the cache is warm and the changed-target list includes `//internal/models`
+- **WHEN** the triggering event's `action` is `synchronize` and the changed-target list includes
+  `//internal/models`
 - **THEN** the workflow selects `stage_3` (even if leaf packages also appear in the same list)
 
 #### Scenario: Unrecognized change yields the fallback stage
-- **WHEN** the cache is warm and the changed-target list contains neither `//internal/models` nor
-  `//internal/notifier`/`//internal/formatter` (e.g., only `//cmd` or `//internal/client` changed)
+- **WHEN** the triggering event's `action` is `synchronize` and the changed-target list contains
+  neither `//internal/models` nor `//internal/notifier`/`//internal/formatter` (e.g., only `//cmd` or
+  `//internal/client` changed)
 - **THEN** the workflow selects `other` and the resulting comment names `internal/notifier` and
   `internal/models` as the suggested files to edit next
 
