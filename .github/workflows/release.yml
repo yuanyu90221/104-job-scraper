@@ -72,3 +72,31 @@ jobs:
           gh release create "$VERSION" \
             --title "$VERSION" \
             --generate-notes
+          gh release view "$VERSION" --json body -q .body > /tmp/release_note_body.md
+
+      - name: 把 Release Note 同步到 Wiki
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          WIKI_DIR="$(mktemp -d)"
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git" "$WIKI_DIR"
+
+          PAGE="$WIKI_DIR/Release-Notes.md"
+          [ -f "$PAGE" ] || echo "# Release Notes" > "$PAGE"
+
+          {
+            head -n 1 "$PAGE"
+            echo ""
+            echo "## $VERSION（$(date -u +%Y-%m-%d)）"
+            echo ""
+            cat /tmp/release_note_body.md
+            tail -n +2 "$PAGE"
+          } > /tmp/merged.md
+          mv /tmp/merged.md "$PAGE"
+
+          cd "$WIKI_DIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Release-Notes.md
+          git commit -m "Add release notes for $VERSION"
+          git push
