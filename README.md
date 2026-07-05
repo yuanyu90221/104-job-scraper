@@ -90,4 +90,6 @@ workflow 會自動讀取目前最新的 git tag（尚無任何 tag 時視為 `v0
 
 ## 每日自動爬蟲
 
-`daily-scrape.yml` 每天 01:00 UTC（台灣時間 09:00）自動執行，也可以手動 `workflow_dispatch` 並自訂 `keyword` / `months` / `pages` / `line_top`。流程：checkout → build → 執行爬蟲 → 透過 LINE Messaging API 把前 `line_top` 筆結果推播出去（預設 10）→ 把完整結果 `jobs.json` 存成 30 天效期的 Artifact。推播需要三個 GitHub Secrets：`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_TARGET_ID`。
+`daily-scrape.yml` 排程為每天 01:07 UTC（台灣時間 09:07）自動執行，也可以手動 `workflow_dispatch` 並自訂 `keyword` / `months` / `pages` / `line_top`。流程：checkout → build → 執行爬蟲 → 透過 LINE Messaging API 把前 `line_top` 筆結果推播出去（預設 10）→ 把完整結果 `jobs.json` 存成 30 天效期的 Artifact。推播需要三個 GitHub Secrets：`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_TARGET_ID`。
+
+> **關於排程時間的延遲**：GitHub Actions 的 `schedule` 事件不保證準時觸發，系統負載較高時（尤其是整點附近）可能延遲數小時。cron 特意設在 `01:07`（而非整點 `01:00`）以盡量避開尖峰時段，但仍可能因 GitHub 端負載而延後實際執行時間。
