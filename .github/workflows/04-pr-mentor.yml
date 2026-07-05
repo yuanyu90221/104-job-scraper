@@ -61,9 +61,9 @@ jobs:
           # restore-keys already pulled in a warm LMDB store from the prior push.
           if [ "${{ github.event.action }}" = "opened" ]; then
             STAGE=stage_1
-          elif echo "$CHANGED" | grep -q '^//internal/models'; then
+          elif echo "$CHANGED" | grep -Eq '^(//)?internal/models'; then
             STAGE=stage_3
-          elif echo "$CHANGED" | grep -qE '^//internal/(notifier|formatter)'; then
+          elif echo "$CHANGED" | grep -Eq '^(//)?internal/(notifier|formatter)'; then
             STAGE=stage_2
           else
             STAGE=other
