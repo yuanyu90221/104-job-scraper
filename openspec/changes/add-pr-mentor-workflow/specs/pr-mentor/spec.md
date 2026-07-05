@@ -27,7 +27,10 @@ The workflow SHALL classify each run into exactly one stage — `stage_1` (cold 
 simulated/hardcoded build log or call an external LLM to perform this classification. The workflow
 SHALL NOT use `actions/cache`'s `cache-hit` output as the cold/warm signal, since that output only
 reports `true` on an exact primary-key match and the cache key embeds `github.sha`, making it `false`
-on every push after the first regardless of whether the LMDB store was actually warm.
+on every push after the first regardless of whether the LMDB store was actually warm. Target-name
+matching SHALL tolerate both a leading `//` and no leading slash, since the observed output of `pants
+... list` for this repo's targets is unprefixed (e.g. `internal/notifier:notifier`), not `//internal/
+notifier:notifier`.
 
 #### Scenario: PR-opened event always yields Stage 1 regardless of changed files
 - **WHEN** the triggering event's `action` is `opened`
@@ -35,18 +38,18 @@ on every push after the first regardless of whether the LMDB store was actually 
 
 #### Scenario: Leaf package change yields Stage 2
 - **WHEN** the triggering event's `action` is `synchronize` and the changed-target list includes
-  `//internal/notifier` or `//internal/formatter` but not `//internal/models`
+  `internal/notifier` or `internal/formatter` but not `internal/models`
 - **THEN** the workflow selects `stage_2`
 
 #### Scenario: Common package change yields Stage 3
 - **WHEN** the triggering event's `action` is `synchronize` and the changed-target list includes
-  `//internal/models`
+  `internal/models`
 - **THEN** the workflow selects `stage_3` (even if leaf packages also appear in the same list)
 
 #### Scenario: Unrecognized change yields the fallback stage
 - **WHEN** the triggering event's `action` is `synchronize` and the changed-target list contains
-  neither `//internal/models` nor `//internal/notifier`/`//internal/formatter` (e.g., only `//cmd` or
-  `//internal/client` changed)
+  neither `internal/models` nor `internal/notifier`/`internal/formatter` (e.g., only `cmd` or
+  `internal/client` changed)
 - **THEN** the workflow selects `other` and the resulting comment names `internal/notifier` and
   `internal/models` as the suggested files to edit next
 

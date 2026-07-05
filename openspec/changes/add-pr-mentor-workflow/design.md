@@ -56,7 +56,9 @@ approved plan this change implements).
    subsequent push even though `restore-keys` already restored a warm LMDB store from the prior push
    (confirmed live: the second push's `pants test ::` finished in ~2s yet was still misclassified as
    Stage 1). `github.event.action` has no such false-negative and is the signal GitHub itself uses to
-   distinguish "PR just opened" from "PR updated."
+   distinguish "PR just opened" from "PR updated." Also found live: this repo's `pants ... list`
+   output is unprefixed (`internal/notifier:notifier`, not `//internal/notifier:notifier`), so the
+   target-name grep tolerates both an optional leading `//` and none.
 
 3. **Sticky comment via hidden marker, not `createComment` per push.**
    Use `<!-- pant-mentor -->` as a hidden HTML comment marker; on each run, list existing comments via
