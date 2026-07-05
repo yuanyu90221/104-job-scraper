@@ -61,73 +61,16 @@ set -a && source .env && set +a
 
 ## 用這個專案學習 Pants Build 的 GitHub Action
 
-`.github/workflows/` 底下有 3 個「教學 Step」workflow，都是 `workflow_dispatch`（手動觸發），可以在 GitHub 網頁的 **Actions** 分頁逐一執行，每次執行都會在 Job Summary 產生 Mermaid 圖解釋當前發生的事：
+`.github/workflows/` 底下有 4 個教學 workflow，示範 Pants 的依賴圖查詢、全量 build、增量 build，以及
+「開 PR 自動判斷學習關卡並留言」的互動式導師（`04-pr-mentor.yml`）。另外 `pants-ci.yml` 是實際跑在
+每次 push / PR 上的 CI 守門。
 
-1. **`01-pants-list.yml` — 展示 Targets 與依賴圖**
-   執行 `pants list ::`、`pants dependencies` 查看專案裡所有 Pants target，以及 `search`、`cmd` 的依賴關係圖。適合第一次認識「Pants 如何看待一個 Go module」。
+完整教學（每個 Step 在教什麼、如何解讀 Mermaid 依賴圖、建議操作順序、Codespaces 練習環境）都整理在
+**[專案 Wiki](https://github.com/yuanyu90221/104-job-scraper/wiki)**，README 只留這個入口，避免內容越滾越長：
 
-2. **`02-full-build.yml` — 全量 Build（無快取）**
-   不還原 LMDB 快取，直接 `pants test ::` + `pants package cmd:bin`，示範「完全沒有快取」時每個套件都要重新編譯，並記錄耗時。
-
-3. **`03-incremental.yml` — 增量 Build（有快取）**
-   還原 LMDB 快取後，用 `pants --changed-since=HEAD~1 --changed-dependents=transitive` 只測試「有變更 + 受影響」的套件。手動觸發時可用 `changed_package` 這個 input 選擇模擬變更 `formatter` / `client` / `models` / `notifier`，觀察依賴圖顏色（綠=快取命中、紅=重新編譯、橘=因依賴而重建）如何不同（改 `models` 會牽動全部套件，改葉節點只影響自己 + `cmd`）。
-
-4. **`04-pr-mentor.yml` — PR 導師（自動、互動式）**
-   前三個 Step 都要手動觸發；這一個是 `pull_request` 事件觸發（開 PR / push 新 commit 時自動跑），
-   用**規則式腳本**（不呼叫 LLM）判斷你目前處在哪個學習關卡，並在 PR 底下留言（同一個 PR 只維護
-   一則留言，後續 push 會更新內容，不會愈刷愈多則）：
-   - PR 第一次執行、Pants 快取還是空的 → **關卡一**：全量 build。
-   - 改了 `internal/notifier`（或 `internal/formatter`）→ **關卡二**：只有它跟 `cmd` 需要重建。
-   - 改了 `internal/models` → **關卡三**：因為 fan-in 最高，全部套件都被牽動重建。
-   - 改了其他檔案（如只改 `cmd`／文件）→ 通用留言，引導你去試上面兩個檔案。
-
-   判斷依據是真實的 `pants --changed-since=<base_sha> --changed-dependents=transitive list` 輸出跟
-   真實的 `pants test` 耗時，不是模擬數據；快取 key 也是每個 PR 各自獨立（`pants-lmdb-tutorial-pr<PR
-   編號>-...`），所以每個新 PR 都會重新體驗一次「關卡一」的冷啟動。
-
-   **如何使用（不用手動觸發，開 PR 就會自動跑）：**
-   1. 從 `main` 開一個新分支，push 上去後對著 `main` 開一個 PR（不需要任何額外設定）。
-   2. PR 一開起來，`04-pr-mentor.yml` 會自動被 `pull_request` 事件觸發並開始執行；等它跑完，
-      PR 底下會自動出現一則導師留言（第一次通常是「關卡一：全量 build」，因為這個 PR 的快取還是空的）。
-   3. 在同一個分支上繼續修改程式碼並 push 新 commit：
-      - 只改 `internal/notifier/line.go`（或 `internal/formatter`）→ 下次留言會更新成「關卡二」。
-      - 改 `internal/models/job.go` → 下次留言會更新成「關卡三」（fan-in 最高，全部套件重建）。
-   4. 不用手動刷新或重新觸發任何東西——留言是同一則「sticky comment」，每次 push 完 workflow 跑完就會自動更新內容，不會愈刷愈多則。
-   5. 想重新從關卡一開始體驗，開一個全新的 PR 即可（快取 key 是每個 PR 各自獨立的）。
-
-   > 想要不改任何程式碼、只是快速跑一次看看導師留言長什麼樣子？參考
-   > [`docs/pr-mentor-trial-guide.md`](docs/pr-mentor-trial-guide.md)，裡面示範用空
-   > commit 開一個測試用 PR，看完留言就關閉、不用合併。
-
-另外 `pants-ci.yml` 是實際跑在每次 push / PR 上的 CI：一個 job 用純 `go test`/`go vet`/`go build` 把關，另一個 job 用 Pants 重跑一次（`pants list ::` + `pants package cmd:bin`），驗證 Pants 設定本身沒有壞掉。
-
-### 建議的操作順序
-
-1. Fork 或 clone 這個 repo 到你自己的 GitHub 帳號。
-2. 到 **Actions** 分頁，依序手動執行 `教學 Step 1` → `Step 2` → `Step 3`。
-3. 每個 workflow 跑完後點進 run 頁面看 **Summary**，裡面的 Mermaid 圖會搭配當次的實際 log 說明發生了什麼事。
-4. 對照 Step 2（全量、無快取）跟 Step 3（增量、有快取）的耗時輸出，感受 Pants 快取帶來的差異。
-5. 想自己做實驗，有兩種方式：
-   - 手動：修改 `internal/formatter` 或 `internal/models` 裡的檔案後 push 一個 commit，再手動跑一次
-     Step 3，觀察 `pants --changed-since` 抓到的變更範圍是否符合預期。
-   - 自動／互動：改用 Step 4 的方式——直接開一個 PR，依序修改 `internal/notifier/line.go`、
-     `internal/models/job.go`，每次 push 完不用手動做任何事，看 PR 底下的導師留言自動更新，一路從
-     關卡一走到關卡三。
-
-### 用 GitHub Codespaces 建立互動式練習環境
-
-repo 已內建 `.devcontainer/devcontainer.json`，開一個 Codespace 就會自動裝好 Go 1.25 + Pants，並套用 Go 1.24+ 的 `GOEXPERIMENT` workaround（`scripts/patch-pants-go.sh`）—— 跟教學 workflow 裡的 `Install Pants` / `Patch Pants Go backend` 兩步驟完全一致，不用手動再貼指令：
-
-1. 到 repo 頁面點 **Code → Codespaces → Create codespace on main**。
-2. 等 Codespace 建立完成（`postCreateCommand` 會自動跑完安裝 + patch），開終端機直接執行：
-
-```bash
-pants list ::
-pants dependencies internal/search::
-pants --changed-since=HEAD~1 --changed-dependents=transitive list
-```
-
-這幾個指令跟 `01-pants-list.yml` / `03-incremental.yml` 在 CI 裡跑的完全相同，差別只是在 Codespace 裡是互動式的，可以隨時改 `internal/formatter` 或 `internal/models` 的檔案後立刻重跑 `--changed-since` 看差異，不用等 GitHub Actions run 完。
+- **[Pants Build 教學指南](https://github.com/yuanyu90221/104-job-scraper/wiki/Pants-Build-教學指南)** — Step 1~3 手動教學 workflow 詳解
+- **[PR 導師 Workflow](https://github.com/yuanyu90221/104-job-scraper/wiki/PR-導師-Workflow)** — Step 4 自動化互動教學、關卡判斷規則
+- **[GitHub Codespaces 練習環境](https://github.com/yuanyu90221/104-job-scraper/wiki/GitHub-Codespaces-練習環境)** — 免安裝的互動式練習環境
 
 ## 每日自動爬蟲
 
