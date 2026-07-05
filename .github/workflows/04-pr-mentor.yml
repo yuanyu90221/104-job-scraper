@@ -1,0 +1,212 @@
+name: 🚀 教學 Step 4 - PR 導師（互動式漸進編譯）
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  pr-mentor:
+    name: PR 導師（規則式關卡判斷）
+    runs-on: ubuntu-latest
+    env:
+      GOEXPERIMENT: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go 1.25
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Cache Pants LMDB store (PR-scoped)
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pants/lmdb_store
+          key: "pants-lmdb-tutorial-pr${{ github.event.pull_request.number }}-${{ github.sha }}"
+          restore-keys: |
+            pants-lmdb-tutorial-pr${{ github.event.pull_request.number }}-
+
+      - name: Install Pants
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL https://static.pantsbuild.org/setup/get-pants.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Patch Pants Go backend (GOEXPERIMENT workaround for Go 1.24+)
+        run: |
+          pants --no-pantsd version
+          bash scripts/patch-pants-go.sh
+
+      - name: 偵測變更範圍與關卡
+        id: detect
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          CHANGED=$(pants --changed-since="$BASE_SHA" --changed-dependents=transitive list 2>/dev/null || true)
+
+          echo "changed<<PANT_MENTOR_EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "PANT_MENTOR_EOF" >> "$GITHUB_OUTPUT"
+
+          # github.event.action (opened vs synchronize) is the reliable cold/warm
+          # signal here, not actions/cache's cache-hit output: our cache key embeds
+          # github.sha, so cache-hit only reports true on an exact re-run of the same
+          # commit. Every subsequent push reports cache-hit=false even though
+          # restore-keys already pulled in a warm LMDB store from the prior push.
+          if [ "${{ github.event.action }}" = "opened" ]; then
+            STAGE=stage_1
+          elif echo "$CHANGED" | grep -Eq '^(//)?internal/models'; then
+            STAGE=stage_3
+          elif echo "$CHANGED" | grep -Eq '^(//)?internal/(notifier|formatter)'; then
+            STAGE=stage_2
+          else
+            STAGE=other
+          fi
+          echo "stage=$STAGE" >> "$GITHUB_OUTPUT"
+
+      - name: 記錄開始時間
+        run: echo "START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: 執行 Pants test（依關卡決定範圍）
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          if [ "${{ steps.detect.outputs.stage }}" = "stage_1" ]; then
+            pants test ::
+          else
+            pants --changed-since="$BASE_SHA" --changed-dependents=transitive test
+          fi
+
+      - name: 輸出耗時
+        run: echo "ELAPSED=$(( $(date +%s) - START ))" >> "$GITHUB_ENV"
+
+      - name: 留言 / 更新 PR 導師訊息
+        uses: actions/github-script@v7
+        env:
+          STAGE: ${{ steps.detect.outputs.stage }}
+          CHANGED: ${{ steps.detect.outputs.changed }}
+          ELAPSED: ${{ env.ELAPSED }}
+        with:
+          script: |
+            const marker = '<!-- pant-mentor -->';
+            const stage = process.env.STAGE;
+            const elapsed = process.env.ELAPSED;
+            const changed = (process.env.CHANGED || '').trim();
+            const changedList = changed
+              ? changed.split('\n').map((line) => `- \`${line}\``).join('\n')
+              : '_（沒有偵測到受影響的 target）_';
+
+            const bodies = {
+              stage_1: [
+                '## 🚀 關卡一：冷啟動全量編譯完成！',
+                '',
+                '### 📊 建置數據報告',
+                '- 這是這個 PR 第一次執行，Pants 的 LMDB 快取還是空的。',
+                `- \`pants test ::\` 對**全部** target 重新編譯 + 測試，耗時 **${elapsed} 秒**。`,
+                '',
+                '### 💡 導師觀點',
+                '沒有快取的第一次 build 一定是全量的——這是基準線。從下一次 push 開始，Pants 會用',
+                '`--changed-since` 只重建真正受影響的部分，你才能看出差異。',
+                '',
+                '### 🎯 下一關挑戰',
+                '編輯 `internal/notifier/line.go`，在 `post()` 方法呼叫 `PushMessage` 之前加一行：',
+                '',
+                '```go',
+                'fmt.Fprintf(os.Stderr, "line: pushing message (%d runes)\\n", len([]rune(message)))',
+                '```',
+                '',
+                'push 一個新 commit，觀察這則留言如何變成「關卡二」。',
+              ].join('\n'),
+
+              stage_2: [
+                '## 🎯 關卡二：精準增量編譯達成！',
+                '',
+                '### 📊 建置數據報告',
+                '受 Pants 判定為變更（含下游依賴）的 target：',
+                changedList,
+                '',
+                `耗時 **${elapsed} 秒**（只測試上面這些 target，其餘全部快取命中）。`,
+                '',
+                '### 💡 導師觀點',
+                '`internal/notifier`（以及 `internal/formatter`）是「葉節點」套件——只依賴 `internal/models`，',
+                '沒有別的套件依賴它們（除了最終的 `cmd`）。改它們只會讓自己跟 `cmd` 重建，`models`／`client`／',
+                '`search` 全部命中快取。',
+                '',
+                '### 🎯 下一關挑戰',
+                '編輯 `internal/models/job.go`，幫 `Job` 加一個方法：',
+                '',
+                '```go',
+                'func (j Job) String() string {',
+                '    return j.JobNo + " " + j.JobName',
+                '}',
+                '```',
+                '',
+                'push 一個新 commit，看看只改一個「共用」套件會讓多少東西被牽動重建——那就是「關卡三」。',
+              ].join('\n'),
+
+              stage_3: [
+                '## 🕸️ 關卡三：牽一髮動全身！',
+                '',
+                '### 📊 建置數據報告',
+                '受 Pants 判定為變更（含下游依賴）的 target：',
+                changedList,
+                '',
+                `耗時 **${elapsed} 秒**。`,
+                '',
+                '### 💡 導師觀點',
+                '`internal/models` 被 `client`／`formatter`／`notifier`／`search` 四個套件依賴（fan-in = 4）。',
+                '只要它變了，Pants 的依賴圖判定所有下游都「可能受影響」，於是全部一起重新編譯——這正是',
+                '「共用底層套件的變更成本最高」的示範。',
+                '',
+                '恭喜完成三個關卡！你已經體驗了冷啟動全量編譯、葉節點精準增量、以及共用套件的全面重建。歡迎繼續',
+                '在 `internal/` 底下做其他實驗，觀察 `pants --changed-since` 抓到的範圍是否符合你的預期。',
+              ].join('\n'),
+
+              other: [
+                '## 🤔 尚未命中任何範例關卡',
+                '',
+                '### 📊 建置數據報告',
+                '受 Pants 判定為變更（含下游依賴）的 target：',
+                changedList,
+                '',
+                `耗時 **${elapsed} 秒**。`,
+                '',
+                '### 💡 導師觀點',
+                '這次變更沒有命中 `internal/notifier`／`internal/formatter`（關卡二：精準增量編譯）或',
+                '`internal/models`（關卡三：牽一髮動全身）。',
+                '',
+                '### 🎯 試試看',
+                '編輯 `internal/notifier/line.go` 或 `internal/models/job.go` 其中一個檔案再 push 一次，',
+                '觀察這則留言如何依你改的套件變化。',
+              ].join('\n'),
+            };
+
+            const body = `${marker}\n${bodies[stage] || bodies.other}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
