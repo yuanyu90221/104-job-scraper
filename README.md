@@ -72,6 +72,19 @@ set -a && source .env && set +a
 3. **`03-incremental.yml` — 增量 Build（有快取）**
    還原 LMDB 快取後，用 `pants --changed-since=HEAD~1 --changed-dependents=transitive` 只測試「有變更 + 受影響」的套件。手動觸發時可用 `changed_package` 這個 input 選擇模擬變更 `formatter` / `client` / `models` / `notifier`，觀察依賴圖顏色（綠=快取命中、紅=重新編譯、橘=因依賴而重建）如何不同（改 `models` 會牽動全部套件，改葉節點只影響自己 + `cmd`）。
 
+4. **`04-pr-mentor.yml` — PR 導師（自動、互動式）**
+   前三個 Step 都要手動觸發；這一個是 `pull_request` 事件觸發（開 PR / push 新 commit 時自動跑），
+   用**規則式腳本**（不呼叫 LLM）判斷你目前處在哪個學習關卡，並在 PR 底下留言（同一個 PR 只維護
+   一則留言，後續 push 會更新內容，不會愈刷愈多則）：
+   - PR 第一次執行、Pants 快取還是空的 → **關卡一**：全量 build。
+   - 改了 `internal/notifier`（或 `internal/formatter`）→ **關卡二**：只有它跟 `cmd` 需要重建。
+   - 改了 `internal/models` → **關卡三**：因為 fan-in 最高，全部套件都被牽動重建。
+   - 改了其他檔案（如只改 `cmd`／文件）→ 通用留言，引導你去試上面兩個檔案。
+
+   判斷依據是真實的 `pants --changed-since=<base_sha> --changed-dependents=transitive list` 輸出跟
+   真實的 `pants test` 耗時，不是模擬數據；快取 key 也是每個 PR 各自獨立（`pants-lmdb-tutorial-pr<PR
+   編號>-...`），所以每個新 PR 都會重新體驗一次「關卡一」的冷啟動。
+
 另外 `pants-ci.yml` 是實際跑在每次 push / PR 上的 CI：一個 job 用純 `go test`/`go vet`/`go build` 把關，另一個 job 用 Pants 重跑一次（`pants list ::` + `pants package cmd:bin`），驗證 Pants 設定本身沒有壞掉。
 
 ### 建議的操作順序
@@ -80,7 +93,12 @@ set -a && source .env && set +a
 2. 到 **Actions** 分頁，依序手動執行 `教學 Step 1` → `Step 2` → `Step 3`。
 3. 每個 workflow 跑完後點進 run 頁面看 **Summary**，裡面的 Mermaid 圖會搭配當次的實際 log 說明發生了什麼事。
 4. 對照 Step 2（全量、無快取）跟 Step 3（增量、有快取）的耗時輸出，感受 Pants 快取帶來的差異。
-5. 想自己做實驗，可以修改 `internal/formatter` 或 `internal/models` 裡的檔案後 push 一個 commit，再手動跑一次 Step 3，觀察 `pants --changed-since` 抓到的變更範圍是否符合預期。
+5. 想自己做實驗，有兩種方式：
+   - 手動：修改 `internal/formatter` 或 `internal/models` 裡的檔案後 push 一個 commit，再手動跑一次
+     Step 3，觀察 `pants --changed-since` 抓到的變更範圍是否符合預期。
+   - 自動／互動：改用 Step 4 的方式——直接開一個 PR，依序修改 `internal/notifier/line.go`、
+     `internal/models/job.go`，每次 push 完不用手動做任何事，看 PR 底下的導師留言自動更新，一路從
+     關卡一走到關卡三。
 
 ### 用 GitHub Codespaces 建立互動式練習環境
 
