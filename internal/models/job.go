@@ -3,6 +3,9 @@ package models
 // SearchResponse mirrors the 104 /jobs/search/api/jobs response envelope.
 type SearchResponse struct {
 	Data []Job `json:"data"`
+	// RequestURL is the exact search URL used to fetch this response,
+	// populated by client.Search — not part of the 104 API's own JSON.
+	RequestURL string `json:"-"`
 }
 
 // Job represents a single 104 job listing from the /api/jobs endpoint.

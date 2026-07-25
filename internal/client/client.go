@@ -217,6 +217,7 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 	errCh := make(chan error, 1)
 
 	pageURL := buildURL(c.baseURL, params)
+	fmt.Fprintf(os.Stderr, "[client] 查詢網址 (page %d): %s\n", params.Page, pageURL)
 
 	// isRelevant reports whether a response is either the page navigation
 	// itself or the search API call — the only two requests that matter for
@@ -293,6 +294,7 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 				if len(sr.Data) == 0 {
 					return
 				}
+				sr.RequestURL = pageURL
 				select {
 				case respCh <- &sr:
 				default:

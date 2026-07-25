@@ -65,28 +65,40 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
+// buildSearchParams builds the search request params. Order defaults to 1
+// (relevance): a live comparison (see
+// openspec/changes/fix-search-order-relevance-mismatch) showed order=2
+// (posting date) returns mostly keyword-irrelevant jobs, while order=1
+// returns overwhelmingly relevant ones for the same keyword. Recency is
+// still applied via days (server-side) and the caller's months cutoff
+// (client-side), independent of this ordering.
+func buildSearchParams(keyword, area string, days int) models.SearchParams {
+	return models.SearchParams{
+		Keyword: keyword,
+		Area:    area,
+		Days:    days,
+		Order:   1, // 依相關性排序
+		Asc:     0,
+	}
+}
+
 func run(keyword, area string, days, months, pages int, format formatter.Format, outputFile, lineChannelSecret, lineChannelToken, lineTargetID string, lineTopN int) error {
 	if lineChannelToken != "" && lineTargetID == "" {
 		return fmt.Errorf("設定 --line-channel-token 時必須同時提供 --line-target-id")
 	}
 
-	params := models.SearchParams{
-		Keyword: keyword,
-		Area:    area,
-		Days:    days,
-		Order:   2, // 依刊登日期排序
-		Asc:     0, // 最新優先
-	}
+	params := buildSearchParams(keyword, area, days)
 
 	s, err := search.New()
 	if err != nil {
 		return fmt.Errorf("初始化瀏覽器: %w", err)
 	}
 	defer s.Close()
-	jobs, err := s.Run(params, pages)
+	jobs, requestURL, err := s.Run(params, pages)
 	if err != nil {
 		return fmt.Errorf("搜尋失敗: %w", err)
 	}
+	fmt.Fprintf(os.Stderr, "查詢網址: %s\n", requestURL)
 
 	// 客戶端日期過濾：只保留 months 個月內刊登的職缺
 	if months > 0 {
@@ -129,7 +141,7 @@ func run(keyword, area string, days, months, pages int, format formatter.Format,
 			return fmt.Errorf("初始化 LINE 通知: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "傳送前 %d 筆職缺至 LINE...\n", lineTopN)
-		if err := ln.Send(jobs, keyword, lineTopN); err != nil {
+		if err := ln.Send(jobs, keyword, lineTopN, requestURL); err != nil {
 			return fmt.Errorf("LINE 通知失敗: %w", err)
 		}
 		fmt.Fprintln(os.Stderr, "LINE 通知已傳送。")
