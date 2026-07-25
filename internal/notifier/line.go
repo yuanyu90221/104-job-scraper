@@ -32,22 +32,25 @@ func NewLine(channelSecret, channelToken, targetID string, options ...linebot.Cl
 }
 
 // Send formats up to topN jobs into a LINE message and pushes it to the
-// configured target.
-func (n *LineNotifier) Send(jobs []models.Job, keyword string, topN int) error {
+// configured target. requestURL is the exact search URL used to fetch these
+// jobs, included in the message so the recipient can see exactly what was
+// queried.
+func (n *LineNotifier) Send(jobs []models.Job, keyword string, topN int, requestURL string) error {
 	if topN <= 0 || topN > len(jobs) {
 		topN = len(jobs)
 	}
 
-	msg := buildMessage(jobs[:topN], keyword)
+	msg := buildMessage(jobs[:topN], keyword, requestURL)
 	return n.post(msg)
 }
 
-func buildMessage(jobs []models.Job, keyword string) string {
+func buildMessage(jobs []models.Job, keyword, requestURL string) string {
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "\n📋 104 職缺每日彙報\n")
 	fmt.Fprintf(&sb, "🔍 關鍵字：%s\n", keyword)
 	fmt.Fprintf(&sb, "📅 日期：%s\n", time.Now().Format("2006-01-02"))
+	fmt.Fprintf(&sb, "🔗 查詢網址：%s\n", requestURL)
 	fmt.Fprintf(&sb, "共找到 %d 筆職缺\n", len(jobs))
 	sb.WriteString("─────────────────\n")
 

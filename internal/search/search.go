@@ -28,17 +28,23 @@ func (s *Searcher) Close() {
 	s.client.Close()
 }
 
-// Run fetches up to maxPages pages for the given params and returns all jobs.
+// Run fetches up to maxPages pages for the given params and returns all
+// jobs, along with the request URL used for page 1 (representative of the
+// search — later pages only differ by the page number).
 // It stops early when a page returns fewer than pageSize results.
-func (s *Searcher) Run(params models.SearchParams, maxPages int) ([]models.Job, error) {
+func (s *Searcher) Run(params models.SearchParams, maxPages int) ([]models.Job, string, error) {
 	var jobs []models.Job
+	var requestURL string
 
 	for page := 1; page <= maxPages; page++ {
 		params.Page = page
 
 		resp, err := s.client.Search(params)
 		if err != nil {
-			return nil, fmt.Errorf("page %d: %w", page, err)
+			return nil, "", fmt.Errorf("page %d: %w", page, err)
+		}
+		if page == 1 {
+			requestURL = resp.RequestURL
 		}
 
 		jobs = append(jobs, resp.Data...)
@@ -48,5 +54,5 @@ func (s *Searcher) Run(params models.SearchParams, maxPages int) ([]models.Job, 
 		}
 	}
 
-	return jobs, nil
+	return jobs, requestURL, nil
 }

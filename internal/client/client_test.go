@@ -254,4 +254,7 @@ func TestSearch_ReturnsJobsOnSuccess(t *testing.T) {
 	if len(resp.Data) == 0 {
 		t.Fatal("Search() returned no jobs, want at least 1 from fixture")
 	}
+	if !strings.Contains(resp.RequestURL, "keyword=golang") {
+		t.Errorf("resp.RequestURL = %q, want it to contain the search keyword", resp.RequestURL)
+	}
 }

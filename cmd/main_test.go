@@ -2,6 +2,17 @@ package main
 
 import "testing"
 
+// TestBuildSearchParams_DefaultsToRelevanceOrder pins the fix from
+// openspec/changes/fix-search-order-relevance-mismatch: order=2 (date) was
+// shown live to return mostly keyword-irrelevant jobs, while order=1
+// (relevance) returned overwhelmingly relevant ones for the same keyword.
+func TestBuildSearchParams_DefaultsToRelevanceOrder(t *testing.T) {
+	params := buildSearchParams("golang 後端工程師", "", 30)
+	if params.Order != 1 {
+		t.Errorf("Order = %d, want 1 (relevance)", params.Order)
+	}
+}
+
 func TestNewRootCmd_LineFlagsDefaultFromEnv(t *testing.T) {
 	t.Setenv("LINE_CHANNEL_SECRET", "env-secret")
 	t.Setenv("LINE_CHANNEL_ACCESS_TOKEN", "env-token")

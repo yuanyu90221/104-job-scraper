@@ -26,7 +26,7 @@ var sampleJobs = []models.Job{
 }
 
 func TestBuildMessage_ContainsJobName(t *testing.T) {
-	msg := buildMessage(sampleJobs, "golang 後端工程師")
+	msg := buildMessage(sampleJobs, "golang 後端工程師", "https://www.104.com.tw/jobs/search/?keyword=golang")
 	if !strings.Contains(msg, "Golang 後端工程師") {
 		t.Error("message should contain job name")
 	}
@@ -35,12 +35,19 @@ func TestBuildMessage_ContainsJobName(t *testing.T) {
 	}
 }
 
+func TestBuildMessage_ContainsRequestURL(t *testing.T) {
+	msg := buildMessage(sampleJobs, "golang 後端工程師", "https://www.104.com.tw/jobs/search/?keyword=golang&order=2&asc=0")
+	if !strings.Contains(msg, "https://www.104.com.tw/jobs/search/?keyword=golang&order=2&asc=0") {
+		t.Error("message should contain the search request URL")
+	}
+}
+
 func TestBuildMessage_TruncatesLongMessages(t *testing.T) {
 	many := make([]models.Job, 20)
 	for i := range many {
 		many[i] = sampleJobs[0]
 	}
-	msg := buildMessage(many, "golang")
+	msg := buildMessage(many, "golang", "https://www.104.com.tw/jobs/search/?keyword=golang")
 	if len([]rune(msg)) == 0 {
 		t.Error("message should not be empty")
 	}
@@ -87,7 +94,7 @@ func TestSend_PushesToTargetIDViaMessagingAPI(t *testing.T) {
 		t.Fatalf("NewLine() error = %v", err)
 	}
 
-	if err := n.Send(sampleJobs, "golang 後端工程師", 10); err != nil {
+	if err := n.Send(sampleJobs, "golang 後端工程師", 10, "https://www.104.com.tw/jobs/search/?keyword=golang"); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
 
@@ -120,7 +127,7 @@ func TestSend_ReturnsErrorOnAPIFailure(t *testing.T) {
 		t.Fatalf("NewLine() error = %v", err)
 	}
 
-	if err := n.Send(sampleJobs, "golang", 10); err == nil {
+	if err := n.Send(sampleJobs, "golang", 10, "https://www.104.com.tw/jobs/search/?keyword=golang"); err == nil {
 		t.Error("Send() error = nil, want non-nil on API failure")
 	}
 }
