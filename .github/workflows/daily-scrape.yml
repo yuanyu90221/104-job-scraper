@@ -8,7 +8,7 @@ on:
       keyword:
         description: '搜尋關鍵字'
         required: false
-        default: 'golang 後端工程師'
+        default: 'golang'
       months:
         description: '幾個月內的職缺'
         required: false
