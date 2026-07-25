@@ -38,5 +38,5 @@
 
 ## 7. Follow-up
 
-- [ ] 7.1 Record this spike's outcome in `investigate-104-bot-detection-alternatives` (tasks 3.2/4.1/4.2) so its decision handoff reflects go-rod's actual result
-- [ ] 7.2 Archive this change via OpenSpec once merged and validated, promoting `job-search-scraping` into `openspec/specs/`
+- [x] 7.1 Recorded this spike's outcome in `investigate-104-bot-detection-alternatives` (tasks 3.2/4.1/4.2): go-rod + go-rod/stealth (option C) is the implemented and production-validated result — merged, running live in `daily-scrape.yml` with no Cloudflare block observed on the go-rod path (dispatch 28715484675), so no further D/E spike is needed to close that investigation's decision handoff
+- [x] 7.2 Archiving this change via OpenSpec now that it's merged and validated, promoting `job-search-scraping` into `openspec/specs/`
