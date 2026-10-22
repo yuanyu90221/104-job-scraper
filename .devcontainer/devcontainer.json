@@ -1,6 +1,6 @@
 {
   "name": "104-job-scraper (Pants tutorial)",
-  "image": "mcr.microsoft.com/devcontainers/go:1.25-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/go:1.26-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/sshd:1": {}
   },

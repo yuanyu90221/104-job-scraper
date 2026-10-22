@@ -1,0 +1,59 @@
+name: Vulncheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  # 每月 1 日 02:00 UTC 重掃漏洞：新 CVE 可能在程式碼沒變動時公布。
+  schedule:
+    - cron: "0 2 1 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  vulncheck:
+    name: govulncheck（漏洞掃描）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.10"
+
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      # 產出報告：-show verbose 會列出每個漏洞的 Found in / Fixed in 版本與呼叫路徑，
+      # 修正方式即「升級到 Fixed in 的版本」。報告寫入 Job Summary 並上傳 artifact；
+      # 先保留結束碼，確保有漏洞時報告仍會產生，最後再讓 job 失敗。
+      - name: govulncheck 報告
+        run: |
+          mkdir -p vuln-report
+          status=0
+          govulncheck -show verbose ./... > vuln-report/report.txt 2>&1 || status=$?
+          govulncheck -format json ./... > vuln-report/report.json 2>&1 || true
+          {
+            echo "## govulncheck 漏洞掃描報告"
+            echo
+            echo "- Go 版本：$(go version)"
+            echo "- 掃描時間：$(date -u +'%Y-%m-%d %H:%M UTC')"
+            echo "- 結果：$([ "$status" -eq 0 ] && echo '✅ 無漏洞' || echo '❌ 發現漏洞')"
+            echo
+            echo '**修正方式**：依下方每筆漏洞的 `Fixed in` 升級 Go 工具鏈（標準庫）或相依模組（`go get <module>@<fixed>` 後 `go mod tidy`）。'
+            echo
+            echo '```'
+            cat vuln-report/report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vuln-report
+          path: vuln-report/
+          retention-days: 90
