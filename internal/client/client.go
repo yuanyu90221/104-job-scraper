@@ -109,7 +109,19 @@ type Client struct {
 	launcher *launcher.Launcher
 	browser  *rod.Browser
 	baseURL  string
+
+	// overallTimeout bounds one Search call; challengeWait is how long Search
+	// keeps waiting for a Cloudflare managed challenge to self-resolve (the
+	// interstitial 403 is followed by a reload + the real API call when the
+	// challenge JS passes) before giving up with ErrCloudflareChallenge.
+	overallTimeout time.Duration
+	challengeWait  time.Duration
 }
+
+const (
+	defaultOverallTimeout = 60 * time.Second
+	defaultChallengeWait  = 25 * time.Second
+)
 
 // New launches a headless browser with stealth settings to avoid bot
 // detection. The browser channel (auto-resolved vs. a real installed
@@ -132,7 +144,10 @@ func New() (*Client, error) {
 		return nil, fmt.Errorf("connect browser: %w", err)
 	}
 
-	return &Client{launcher: l, browser: browser, baseURL: searchBase}, nil
+	return &Client{
+		launcher: l, browser: browser, baseURL: searchBase,
+		overallTimeout: defaultOverallTimeout, challengeWait: defaultChallengeWait,
+	}, nil
 }
 
 // Close releases the browser and launcher resources.
@@ -309,13 +324,36 @@ func (c *Client) Search(params models.SearchParams) (*models.SearchResponse, err
 		_ = p.Navigate(pageURL)
 	}()
 
-	select {
-	case result := <-respCh:
-		return result, nil
-	case err := <-errCh:
-		return nil, err
-	case <-time.After(60 * time.Second):
-		return nil, fmt.Errorf("timeout: no job data captured within 60s (Cloudflare challenge or no results)")
+	// A challenge 403 is not immediately fatal: a managed challenge that the
+	// browser solves is followed by a reload and the real API response. Start
+	// a grace timer on the first challenge and only fail when it expires.
+	var challengeErr error
+	var graceC <-chan time.Time
+	overall := time.After(c.overallTimeout)
+	start := time.Now()
+	for {
+		select {
+		case result := <-respCh:
+			if challengeErr != nil {
+				fmt.Fprintf(os.Stderr, "[client] page %d: challenge self-resolved after %s\n",
+					params.Page, time.Since(start).Round(100*time.Millisecond))
+			}
+			return result, nil
+		case err := <-errCh:
+			if challengeErr == nil {
+				challengeErr = err
+				graceC = time.After(c.challengeWait)
+				fmt.Fprintf(os.Stderr, "[client] page %d: Cloudflare challenge at +%s, waiting up to %s for it to resolve\n",
+					params.Page, time.Since(start).Round(100*time.Millisecond), c.challengeWait)
+			}
+		case <-graceC:
+			return nil, challengeErr
+		case <-overall:
+			if challengeErr != nil {
+				return nil, challengeErr
+			}
+			return nil, fmt.Errorf("timeout: no job data captured within %s (Cloudflare challenge or no results)", c.overallTimeout)
+		}
 	}
 }
 
