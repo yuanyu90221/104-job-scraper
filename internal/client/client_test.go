@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/yuanyu90221/104-job-scraper/internal/models"
@@ -162,6 +164,7 @@ func TestSearch_DetectsCloudflareChallenge(t *testing.T) {
 	}
 	defer c.Close()
 	c.baseURL = srv.URL + "/"
+	c.challengeWait = 2 * time.Second
 
 	_, err = c.Search(models.SearchParams{Keyword: "golang", Page: 1})
 	if !errors.Is(err, ErrCloudflareChallenge) {
@@ -256,5 +259,53 @@ func TestSearch_ReturnsJobsOnSuccess(t *testing.T) {
 	}
 	if !strings.Contains(resp.RequestURL, "keyword=golang") {
 		t.Errorf("resp.RequestURL = %q, want it to contain the search keyword", resp.RequestURL)
+	}
+}
+
+// TestSearch_WaitsForChallengeToResolve proves a challenge 403 on the page
+// navigation is not fatal: the interstitial reloads itself (as a solved
+// Cloudflare managed challenge does) and the real page then fetches the API.
+func TestSearch_WaitsForChallengeToResolve(t *testing.T) {
+	successBody, err := os.ReadFile("testdata/search_success.json")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/search/api/jobs") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(successBody)
+			return
+		}
+		if hits.Add(1) == 1 {
+			w.Header().Set("Cf-Mitigated", "challenge")
+			w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+			w.WriteHeader(http.StatusForbidden)
+			// Minimal interstitial: avoids the real fixture's replaceState,
+			// which would make the reload target the API URL itself.
+			_, _ = w.Write([]byte("<html><title>Just a moment...</title>challenges.cloudflare.com" +
+				"<script>setTimeout(function(){location.reload()},500)</script></html>"))
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		fmt.Fprint(w, `<html><body><script>fetch("api/jobs");</script></body></html>`)
+	}))
+	defer srv.Close()
+
+	c, err := New()
+	if err != nil {
+		t.Skip("skipping: browser init requires network:", err)
+	}
+	defer c.Close()
+	c.baseURL = srv.URL + "/jobs/search/"
+	c.challengeWait = 10 * time.Second
+
+	resp, err := c.Search(models.SearchParams{Keyword: "golang", Page: 1})
+	if err != nil {
+		t.Fatalf("Search() error = %v, want success after challenge resolves", err)
+	}
+	if len(resp.Data) == 0 {
+		t.Fatal("no jobs returned")
 	}
 }

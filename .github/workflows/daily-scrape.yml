@@ -21,6 +21,14 @@ on:
         description: '推播到 LINE 的職缺筆數'
         required: false
         default: '10'
+      attempt:
+        description: '第幾次嘗試（失敗時自動重新派發，由 workflow 自己帶入，勿手動修改）'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+  actions: write # 失敗時用 gh workflow run 在新 runner 上重試
 
 jobs:
   scrape-and-notify:
@@ -32,7 +40,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
 
       - name: Build binary
         run: go build -o bin/104-job-scraper ./cmd/main.go
@@ -76,7 +84,7 @@ jobs:
       - name: Check scrape result
         if: steps.scrape.outcome == 'failure'
         run: |
-          echo "::error::爬蟲失敗。請確認 self-hosted runner 正在執行，且本機有 DISPLAY 環境變數。"
+          echo "::error::爬蟲失敗（多半是 Cloudflare challenge 擋下 runner IP）。若尚未達重試上限，下一步會在新 runner 上自動重試。"
 
       - name: Show scrape summary
         if: always()
@@ -105,6 +113,24 @@ jobs:
           name: daily-jobs-${{ github.run_id }}
           path: output/jobs.json
           retention-days: 30
+
+      # Cloudflare blocks are mostly tied to the runner's (shared Azure) IP, so
+      # an in-process retry can't change it. Re-dispatch this workflow after a
+      # delay: the new run lands on a different runner/IP. Capped at 3 attempts.
+      - name: Retry on a fresh runner
+        if: steps.scrape.outcome == 'failure' && fromJSON(github.event.inputs.attempt || '1') < 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NEXT=$(( ${{ github.event.inputs.attempt || '1' }} + 1 ))
+          echo "等待 5 分鐘後以第 ${NEXT} 次嘗試重新派發"
+          sleep 300
+          gh workflow run daily-scrape.yml --ref "${{ github.ref_name }}" \
+            -f keyword="${{ github.event.inputs.keyword || 'golang' }}" \
+            -f months="${{ github.event.inputs.months || '3' }}" \
+            -f pages="${{ github.event.inputs.pages || '15' }}" \
+            -f line_top="${{ github.event.inputs.line_top || '10' }}" \
+            -f attempt="$NEXT"
 
       - name: Fail job if scrape failed
         if: steps.scrape.outcome == 'failure'
