@@ -1,6 +1,6 @@
 module github.com/yuanyu90221/104-job-scraper
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/go-rod/rod v0.116.2
